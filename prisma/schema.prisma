@@ -1,0 +1,723 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum TenantPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  LOCATION_MANAGER
+  FINANCE_OFFICER
+  STAFF
+}
+
+enum ParticipantStatus {
+  INQUIRY
+  DOCUMENTS_PENDING
+  FEE_PENDING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  WITHDRAWN
+}
+
+enum SessionStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum EnrolmentStatus {
+  WAITLISTED
+  DOCUMENTS_PENDING
+  FEE_PENDING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  WITHDRAWN
+}
+
+enum DocumentType {
+  BIRTH_CERTIFICATE
+  PASSPORT
+  MEDICAL_CLEARANCE
+  ID_PHOTO
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PaymentPlanType {
+  FULL
+  MONTHLY
+  SEASONAL
+}
+
+enum PaymentMethod {
+  ONLINE_CARD
+  SADAD
+  MADA
+  BANK_TRANSFER
+  CASH
+}
+
+enum PaymentGateway {
+  MOYASAR
+  PAYTABS
+  HYPERPAY
+  OFFLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PENDING_VERIFICATION
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum WaitlistOfferStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  DECLINED
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum NotificationType {
+  REGISTRATION_CONFIRM
+  DOCUMENT_REQUEST
+  FEE_INVOICE
+  PAYMENT_CONFIRM
+  PAYMENT_REMINDER
+  SESSION_START
+  WAITLIST_OFFER
+  BROADCAST
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  DELIVERED
+}
+
+enum WebhookEventStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  ABANDONED
+}
+
+// ─────────────────────────────────────────────
+// TENANTS
+// ─────────────────────────────────────────────
+
+model Tenant {
+  id                 String       @id @default(uuid())
+  name               String
+  slug               String       @unique
+  schemaName         String       @unique @map("schema_name")
+  plan               TenantPlan   @default(STARTER)
+  status             TenantStatus @default(ACTIVE)
+  defaultLang        String       @default("en") @map("default_lang")
+  balanceThreshold   Decimal?     @default(0) @map("balance_threshold") @db.Decimal(10, 2)
+  whatsappPhoneId    String?      @map("whatsapp_phone_id")
+  whatsappToken      String?      @map("whatsapp_token")
+  emailFrom          String?      @map("email_from")
+  emailReplyTo       String?      @map("email_reply_to")
+  deletedAt          DateTime?    @map("deleted_at")
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  locations           Location[]
+  users               User[]
+  sessions            Session[]
+  participants        Participant[]
+  enrolments          Enrolment[]
+  apiKeys             ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+  auditLogs           AuditLog[]
+  broadcastMessages   BroadcastMessage[]
+  refreshTokens       RefreshToken[]
+  notifications       Notification[]
+  invoices            Invoice[]
+  payments            Payment[]
+  documents           Document[]
+  waitlist            Waitlist[]
+  paymentPlans        PaymentPlan[]
+  staffNotes          StaffNote[]
+  webhookEvents       WebhookEvent[]
+  guardians           Guardian[]
+  @@map("tenants")
+}
+
+// ─────────────────────────────────────────────
+// LOCATIONS
+// ─────────────────────────────────────────────
+
+model Location {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  name             String
+  city             String
+  address          String?
+  phone            String?
+  capacity         Int
+  status           String    @default("active")
+  registrationSlug String?   @unique @map("registration_slug")
+  qrCodeUrl        String?   @map("qr_code_url")
+  defaultLang      String    @default("en") @map("default_lang")
+  deletedAt        DateTime? @map("deleted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  users            User[]
+  participants     Participant[]
+  sessionLocations SessionLocation[]
+  enrolments       Enrolment[]
+  waitlist         Waitlist[]
+  broadcastMessages BroadcastMessage[] @relation("FilterLocation")
+
+  @@index([tenantId, status])
+  @@map("locations")
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  locationId     String?   @map("location_id")
+  email          String
+  passwordHash   String    @map("password_hash")
+  role           UserRole
+  totpEnabled    Boolean   @default(false) @map("totp_enabled")
+  totpSecret     String?   @map("totp_secret")
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  locked         Boolean   @default(false)
+  lockedUntil    DateTime? @map("locked_until")
+  lastLoginAt    DateTime? @map("last_login_at")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  location       Location?      @relation(fields: [locationId], references: [id])
+  refreshTokens  RefreshToken[]
+  staffNotes     StaffNote[]
+  auditLogs      AuditLog[]
+  verifiedDocs   Document[]     @relation("VerifiedBy")
+  apiKeys        ApiKey[]
+  recordedPayments Payment[]    @relation("RecordedBy")
+  verifiedPayments Payment[]    @relation("VerifiedBy")
+  broadcastMessages BroadcastMessage[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// REFRESH TOKENS
+// ─────────────────────────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tenantId  String    @map("tenant_id")
+  tokenHash String    @map("token_hash")
+  jti       String    @unique
+  revoked   Boolean   @default(false)
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([userId])
+  @@index([jti])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────
+// API KEYS
+// ─────────────────────────────────────────────
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  createdById String    @map("created_by")
+  keyHash     String    @unique @map("key_hash")
+  label       String
+  scopes      String[]
+  rateLimit   Int       @default(1000) @map("rate_limit")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  createdBy   User      @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@map("api_keys")
+}
+
+// ─────────────────────────────────────────────
+// SESSIONS
+// ─────────────────────────────────────────────
+
+model Session {
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  name          String
+  startDate     DateTime      @map("start_date") @db.Date
+  endDate       DateTime      @map("end_date") @db.Date
+  baseFee       Decimal       @map("base_fee") @db.Decimal(10, 2)
+  status        SessionStatus @default(DRAFT)
+  enrolOpenAt   DateTime?     @map("enrol_open_at")
+  enrolCloseAt  DateTime?     @map("enrol_close_at")
+  deletedAt     DateTime?     @map("deleted_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  sessionLocations SessionLocation[]
+  paymentPlans    PaymentPlan[]
+  enrolments      Enrolment[]
+  waitlist        Waitlist[]
+  broadcastMessages BroadcastMessage[] @relation("FilterSession")
+
+  @@index([tenantId, status])
+  @@map("sessions")
+}
+
+// ─────────────────────────────────────────────
+// SESSION LOCATIONS (many-to-many)
+// ─────────────────────────────────────────────
+
+model SessionLocation {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  locationId  String   @map("location_id")
+  feeOverride Decimal? @map("fee_override") @db.Decimal(10, 2)
+
+  session     Session  @relation(fields: [sessionId], references: [id])
+  location    Location @relation(fields: [locationId], references: [id])
+
+  @@unique([sessionId, locationId])
+  @@map("session_locations")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT PLANS
+// ─────────────────────────────────────────────
+
+model PaymentPlan {
+  id               String          @id @default(uuid())
+  tenantId         String          @map("tenant_id")
+  sessionId        String          @map("session_id")
+  type             PaymentPlanType
+  instalmentCount  Int             @map("instalment_count")
+  instalmentAmount Decimal         @map("instalment_amount") @db.Decimal(10, 2)
+  dueDates         DateTime[]      @map("due_dates")
+  deletedAt        DateTime?       @map("deleted_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  session          Session         @relation(fields: [sessionId], references: [id])
+
+  @@index([tenantId, sessionId])
+  @@map("payment_plans")
+}
+
+// ─────────────────────────────────────────────
+// PARTICIPANTS
+// ─────────────────────────────────────────────
+
+model Participant {
+  id            String            @id @default(uuid())
+  tenantId      String            @map("tenant_id")
+  locationId    String            @map("location_id")
+  uniqueId      String            @map("unique_id")
+  firstNameEn   String            @map("first_name_en")
+  firstNameAr   String?           @map("first_name_ar")
+  lastNameEn    String            @map("last_name_en")
+  lastNameAr    String?           @map("last_name_ar")
+  dateOfBirth   DateTime          @map("date_of_birth") @db.Date
+  gender        String
+  nationality   String?
+  status        ParticipantStatus @default(INQUIRY)
+  phone         String
+  email         String?
+  medicalNotes  String?           @map("medical_notes")
+  preferredLang String            @default("en") @map("preferred_lang")
+  deletedAt     DateTime?         @map("deleted_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  location      Location      @relation(fields: [locationId], references: [id])
+  guardians     Guardian[]
+  enrolments    Enrolment[]
+  documents     Document[]
+  staffNotes    StaffNote[]
+  notifications Notification[]
+  waitlist      Waitlist[]
+
+  @@unique([tenantId, uniqueId])
+  @@index([tenantId, status])
+  @@index([tenantId, locationId])
+  @@map("participants")
+}
+
+// ─────────────────────────────────────────────
+// GUARDIANS
+// ─────────────────────────────────────────────
+
+model Guardian {
+  id                   String    @id @default(uuid())
+  tenantId             String    @map("tenant_id")
+  participantId        String    @map("participant_id")
+  fullName             String    @map("full_name")
+  relationship         String
+  phone                String
+  email                String?
+  portalToken          String?   @unique @map("portal_token")
+  portalTokenExpiresAt DateTime? @map("portal_token_expires_at")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])  // ← added
+  participant Participant @relation(fields: [participantId], references: [id])
+
+  @@index([tenantId, participantId])
+  @@index([portalToken])
+  @@map("guardians")
+}
+
+// ─────────────────────────────────────────────
+// ENROLMENTS
+// ─────────────────────────────────────────────
+
+model Enrolment {
+  id               String          @id @default(uuid())
+  tenantId         String          @map("tenant_id")
+  participantId    String          @map("participant_id")
+  sessionId        String          @map("session_id")
+  locationId       String          @map("location_id")
+  reEnrolledFromId String?         @map("re_enrolled_from")
+  status           EnrolmentStatus @default(FEE_PENDING)
+  paymentPlanType  PaymentPlanType @map("payment_plan_type")
+  totalFee         Decimal         @map("total_fee") @db.Decimal(10, 2)
+  paidAmount       Decimal         @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  balance          Decimal         @map("balance") @db.Decimal(10, 2)
+  waitlistPosition Int?            @map("waitlist_position")
+  enrolledAt       DateTime?       @map("enrolled_at")
+  deletedAt        DateTime?       @map("deleted_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  tenant           Tenant        @relation(fields: [tenantId], references: [id])
+  participant      Participant   @relation(fields: [participantId], references: [id])
+  session          Session       @relation(fields: [sessionId], references: [id])
+  location         Location      @relation(fields: [locationId], references: [id])
+  reEnrolledFrom   Enrolment?    @relation("ReEnrolment", fields: [reEnrolledFromId], references: [id])
+  reEnrolments     Enrolment[]   @relation("ReEnrolment")
+  invoices         Invoice[]
+  payments         Payment[]
+  notifications    Notification[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, participantId])
+  @@map("enrolments")
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────────
+
+model Document {
+  id           String         @id @default(uuid())
+  tenantId     String         @map("tenant_id")
+  participantId String        @map("participant_id")
+  docType      DocumentType   @map("doc_type")
+  storageKey   String         @map("storage_key")
+  status       DocumentStatus @default(PENDING)
+  verifiedById String?        @map("verified_by")
+  verifiedAt   DateTime?      @map("verified_at")
+  deletedAt    DateTime?      @map("deleted_at")
+  uploadedAt   DateTime       @default(now()) @map("uploaded_at")
+
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  participant  Participant @relation(fields: [participantId], references: [id])
+  verifiedBy   User?       @relation("VerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([tenantId, participantId])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────────
+// INVOICES
+// ─────────────────────────────────────────────
+
+model Invoice {
+  id                   String        @id @default(uuid())
+  tenantId             String        @map("tenant_id")
+  enrolmentId          String        @map("enrolment_id")
+  invoiceNumber        String        @unique @map("invoice_number")
+  amount               Decimal       @db.Decimal(10, 2)
+  dueDate              DateTime      @map("due_date") @db.Date
+  status               InvoiceStatus @default(PENDING)
+  paymentPlanType      PaymentPlanType @map("payment_plan_type")
+  paymentLink          String?       @map("payment_link")
+  paymentLinkExpiresAt DateTime?     @map("payment_link_expires_at")
+  reminderSentCount    Int           @default(0) @map("reminder_sent_count")
+  deletedAt            DateTime?     @map("deleted_at")
+  createdAt            DateTime      @default(now()) @map("created_at")
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  enrolment    Enrolment  @relation(fields: [enrolmentId], references: [id])
+  payments     Payment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([enrolmentId])
+  @@map("invoices")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENTS
+// ─────────────────────────────────────────────
+
+model Payment {
+  id             String         @id @default(uuid())
+  tenantId       String         @map("tenant_id")
+  invoiceId      String?        @map("invoice_id")
+  enrolmentId    String         @map("enrolment_id")
+  recordedById   String?        @map("recorded_by")
+  verifiedById   String?        @map("verified_by")
+  gateway        PaymentGateway
+  gatewayRef     String?        @unique @map("gateway_ref")
+  method         PaymentMethod
+  amount         Decimal        @db.Decimal(10, 2)
+  status         PaymentStatus  @default(PENDING)
+  proofKey       String?        @map("proof_key")
+  idempotencyKey String         @unique @map("idempotency_key")
+  verifiedAt     DateTime?      @map("verified_at")
+  paidAt         DateTime?      @map("paid_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  invoice      Invoice?   @relation(fields: [invoiceId], references: [id])
+  enrolment    Enrolment  @relation(fields: [enrolmentId], references: [id])
+  recordedBy   User?      @relation("RecordedBy", fields: [recordedById], references: [id])
+  verifiedBy   User?      @relation("VerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([tenantId, status])
+  @@index([enrolmentId])
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────
+// WAITLIST
+// ─────────────────────────────────────────────
+
+model Waitlist {
+  id             String              @id @default(uuid())
+  tenantId       String              @map("tenant_id")
+  participantId  String              @map("participant_id")
+  sessionId      String              @map("session_id")
+  locationId     String              @map("location_id")
+  position       Int
+  offerSentAt    DateTime?           @map("offer_sent_at")
+  offerExpiresAt DateTime?           @map("offer_expires_at")
+  offerStatus    WaitlistOfferStatus @default(PENDING) @map("offer_status")
+  deletedAt      DateTime?           @map("deleted_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  participant   Participant @relation(fields: [participantId], references: [id])
+  session       Session     @relation(fields: [sessionId], references: [id])
+  location      Location    @relation(fields: [locationId], references: [id])
+
+  @@index([tenantId, sessionId, locationId])
+  @@index([offerExpiresAt])
+  @@map("waitlist")
+}
+
+// ─────────────────────────────────────────────
+// BROADCAST MESSAGES
+// ─────────────────────────────────────────────
+
+model BroadcastMessage {
+  id               String              @id @default(uuid())
+  tenantId         String              @map("tenant_id")
+  createdById      String              @map("created_by")
+  channel          NotificationChannel
+  filterLocationId String?             @map("filter_location_id")
+  filterSessionId  String?             @map("filter_session_id")
+  filterStatus     String?             @map("filter_status")
+  messageBody      String              @map("message_body")
+  sentCount        Int                 @default(0) @map("sent_count")
+  failedCount      Int                 @default(0) @map("failed_count")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  createdBy      User           @relation(fields: [createdById], references: [id])
+  filterLocation Location?      @relation("FilterLocation", fields: [filterLocationId], references: [id])
+  filterSession  Session?       @relation("FilterSession", fields: [filterSessionId], references: [id])
+  notifications  Notification[]
+
+  @@index([tenantId])
+  @@map("broadcast_messages")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id            String              @id @default(uuid())
+  tenantId      String              @map("tenant_id")
+  participantId String?             @map("participant_id")
+  enrolmentId   String?             @map("enrolment_id")
+  broadcastId   String?             @map("broadcast_id")
+  channel       NotificationChannel
+  type          NotificationType
+  status        NotificationStatus  @default(QUEUED)
+  externalId    String?             @map("external_id")
+  retryCount    Int                 @default(0) @map("retry_count")
+  sentAt        DateTime?           @map("sent_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  participant   Participant?      @relation(fields: [participantId], references: [id])
+  enrolment     Enrolment?        @relation(fields: [enrolmentId], references: [id])
+  broadcast     BroadcastMessage? @relation(fields: [broadcastId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([participantId])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// WEBHOOK SUBSCRIPTIONS
+// ─────────────────────────────────────────────
+
+model WebhookSubscription {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  url        String
+  events     String[]
+  secretHash String   @map("secret_hash")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  events_log WebhookEvent[]
+
+  @@index([tenantId, active])
+  @@map("webhook_subscriptions")
+}
+
+// ─────────────────────────────────────────────
+// WEBHOOK EVENTS
+// ─────────────────────────────────────────────
+
+model WebhookEvent {
+  id             String             @id @default(uuid())
+  tenantId       String             @map("tenant_id")
+  subscriptionId String             @map("subscription_id")
+  eventType      String             @map("event_type")
+  payload        Json
+  status         WebhookEventStatus @default(PENDING)
+  attemptCount   Int                @default(0) @map("attempt_count")
+  lastError      String?            @map("last_error")
+  nextRetryAt    DateTime?          @map("next_retry_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([nextRetryAt])
+  @@map("webhook_events")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOGS
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  userId     String?  @map("user_id")
+  action     String
+  resource   String
+  resourceId String   @map("resource_id")
+  beforeState Json?   @map("before_state")
+  afterState  Json?   @map("after_state")
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, resource, resourceId])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// STAFF NOTES
+// ─────────────────────────────────────────────
+
+model StaffNote {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  participantId String    @map("participant_id")
+  authorId      String    @map("author_id")
+  note          String
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  participant Participant @relation(fields: [participantId], references: [id])
+  author      User        @relation(fields: [authorId], references: [id])
+
+  @@index([tenantId, participantId])
+  @@map("staff_notes")
+}

@@ -35,9 +35,6 @@ prisma/dev.db
 *.tgz
 .tmp/
 
-# Lockfiles (if you intentionally want to ignore one lockfile, remove it)
-package-lock.json
-pnpm-lock.yaml
 
 # Local env files
 .local
