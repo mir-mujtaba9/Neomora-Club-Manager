@@ -1,0 +1,46 @@
+# Node
+node_modules/
+npm-debug.log*
+.yarn-integrity
+.pnpm-debug.log
+
+# Build
+dist/
+build/
+
+# Env
+.env
+.env.*
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+
+# Prisma
+.prisma/
+prisma/dev.db
+
+# Misc
+*.tgz
+.tmp/
+
+# Lockfiles (if you intentionally want to ignore one lockfile, remove it)
+package-lock.json
+pnpm-lock.yaml
+
+# Local env files
+.local
+
+# VS Code workspace
+*.code-workspace
