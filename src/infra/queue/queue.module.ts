@@ -16,20 +16,29 @@ const queues = [
   QUEUE_PDF,
 ];
 
+const redisUrl = process.env.REDIS_URL;
+const redisEnabled = (process.env.REDIS_ENABLED ?? 'true').toLowerCase() !== 'false';
+const queueEnabled = (process.env.QUEUE_ENABLED ?? 'true').toLowerCase() !== 'false';
+
+const bullImports =
+  queueEnabled && redisEnabled && !!redisUrl
+    ? [
+        BullModule.forRoot({
+          connection: {
+            url: redisUrl,
+          },
+        }),
+        ...queues.map((name) =>
+          BullModule.registerQueue({
+            name,
+          }),
+        ),
+      ]
+    : [];
+
 @Global()
 @Module({
-  imports: [
-    BullModule.forRoot({
-      connection: {
-        url: process.env.REDIS_URL,
-      },
-    }),
-    ...queues.map((name) =>
-      BullModule.registerQueue({
-        name,
-      }),
-    ),
-  ],
-  exports: [BullModule],
+  imports: bullImports,
+  exports: bullImports.length ? [BullModule] : [],
 })
 export class QueueModule {}
