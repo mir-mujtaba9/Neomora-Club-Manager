@@ -27,16 +27,20 @@ export class AuditLogInterceptor implements NestInterceptor {
           const resource = path.split('/')[1] || 'unknown';
           const resourceId = params?.id || body?.id || 'N/A';
 
+          if (!tenantId) {
+            return;
+          }
+
           await this.prisma.auditLog.create({
             data: {
-              tenantId: tenantId!,
+              tenantId,
               userId: user?.sub,
               action: `${method} ${path}`,
               resource,
               resourceId: String(resourceId),
               ipAddress: ip,
               // beforeState: null, // Hard to capture generically without more complex logic
-              afterState: responseBody || {},
+              afterState: responseBody && typeof responseBody === 'object' ? { id: responseBody.id } : {},
             },
           });
         } catch (error) {

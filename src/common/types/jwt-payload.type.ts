@@ -5,6 +5,8 @@ export interface JwtPayload {
   sub: string;
   /** Tenant ID for multi-tenancy context */
   tenantId: string;
+  /** Optional location context (when user is scoped to a location) */
+  locationId?: string | null;
   /** User Role for authorization */
   role: UserRole;
   /** User Email */
