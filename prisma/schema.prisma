@@ -225,6 +225,7 @@ model User {
   tenantId       String    @map("tenant_id")
   locationId     String?   @map("location_id")
   email          String
+  fullName       String?   @map("full_name")
   passwordHash   String    @map("password_hash")
   role           UserRole
   totpEnabled    Boolean   @default(false) @map("totp_enabled")

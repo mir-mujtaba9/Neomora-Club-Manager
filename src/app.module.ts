@@ -9,6 +9,10 @@ import databaseConfig from './infra/config/database.config';
 import jwtConfig from './infra/config/jwt.config';
 import storageConfig from './infra/config/storage.config';
 import queueConfig from './infra/config/queue.config';
+import { AuthModule } from './modules/auth/auth.module';
+import { GuardianAuthModule } from './modules/auth/guardian-auth.module.js';
+import { LocationsModule } from './modules/locations/locations.module.js';
+import { UsersModule } from './modules/users/users.module.js';
 
 @Module({
   imports: [
@@ -25,6 +29,10 @@ import queueConfig from './infra/config/queue.config';
     PrismaModule,
     RedisModule,
     QueueModule,
+    AuthModule,
+    GuardianAuthModule,
+    LocationsModule,
+    UsersModule,
   ],
 })
 export class AppModule implements NestModule {
