@@ -148,6 +148,19 @@ export class AuthService {
 
 		const payload = await this.verifyRefreshToken(refreshToken);
 
+		const user = await this.prisma.user.findFirst({
+			where: {
+				id: payload.sub,
+				tenantId: payload.tenantId,
+				deletedAt: null,
+			},
+			select: { id: true, email: true, role: true, tenantId: true, locationId: true },
+		});
+
+		if (!user) {
+			throw new UnauthorizedException('Account is inactive');
+		}
+
 		const tokenRecord = await this.prisma.refreshToken.findUnique({
 			where: { jti: payload.jti },
 			select: {
@@ -180,11 +193,11 @@ export class AuthService {
 		});
 
 		const actor: ActorUser = {
-			sub: payload.sub,
-			email: payload.email,
-			role: payload.role,
-			tenantId: payload.tenantId,
-			locationId: payload.locationId ?? null,
+			sub: user.id,
+			email: user.email,
+			role: user.role as unknown as UserRole,
+			tenantId: user.tenantId,
+			locationId: user.locationId ?? null,
 		};
 
 		return this.issueTokens(actor);
