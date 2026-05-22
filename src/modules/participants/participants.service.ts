@@ -1,0 +1,249 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../infra/database/prisma.service.js';
+import { RegisterParticipantDto } from './dto/register-participant.dto.js';
+import { generateUniqueId } from '../../common/utils/unique-id.util.js';
+import { FindParticipantsDto } from './dto/find-participants.dto.js';
+import { UserRole } from '../../common/constants/user-role.constants.js';
+import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto.js';
+
+@Injectable()
+export class ParticipantsService {
+	constructor(private readonly prisma: PrismaService) {}
+
+	async register(dto: RegisterParticipantDto) {
+		const slug = dto.locationSlug;
+
+		const location = await this.prisma.location.findUnique({
+			where: { registrationSlug: slug },
+		});
+
+		if (!location || location.deletedAt || location.status !== 'active') {
+			throw new NotFoundException('Location not found or inactive');
+		}
+
+		const tenantId = location.tenantId;
+
+		// generate a unique participant uniqueId within tenant
+		const count = await this.prisma.participant.count({ where: { tenantId } });
+		const uniqueId = generateUniqueId('P', count + 1);
+
+		const dob = new Date(dto.dateOfBirth);
+		if (isNaN(dob.getTime())) throw new BadRequestException('Invalid dateOfBirth');
+
+		const result = await this.prisma.$transaction(async (tx) => {
+			const participant = await tx.participant.create({
+				data: {
+					tenantId,
+					locationId: location.id,
+					uniqueId,
+					firstNameEn: dto.firstNameEn,
+					firstNameAr: dto.firstNameAr ?? null,
+					lastNameEn: dto.lastNameEn,
+					lastNameAr: dto.lastNameAr ?? null,
+					dateOfBirth: dob,
+					gender: dto.gender,
+					nationality: dto.nationality ?? null,
+					phone: dto.phone,
+					email: null,
+					preferredLang: dto.preferredLang ?? 'en',
+				},
+			});
+
+			const guardian = await tx.guardian.create({
+				data: {
+					tenantId,
+					participantId: participant.id,
+					fullName: dto.guardian.fullName,
+					relationship: dto.guardian.relationship,
+					phone: dto.guardian.phone,
+					email: dto.guardian.email ?? null,
+				},
+			});
+
+			let enrolment = null;
+			let waitlistEntry = null;
+
+			if (dto.sessionId) {
+				const session = await tx.session.findFirst({
+					where: { id: dto.sessionId, tenantId, deletedAt: null },
+					include: {
+						sessionLocations: { where: { locationId: location.id }, select: { feeOverride: true } },
+					},
+				});
+
+				if (!session) throw new NotFoundException('Session not found for this location');
+
+				const totalFee = (session.sessionLocations && session.sessionLocations[0] && session.sessionLocations[0].feeOverride) || session.baseFee;
+
+				const occupied = await tx.enrolment.count({
+					where: {
+						tenantId,
+						sessionId: dto.sessionId,
+						locationId: location.id,
+						deletedAt: null,
+						status: { notIn: ['WAITLISTED', 'WITHDRAWN'] },
+					},
+				});
+
+				if (occupied < location.capacity) {
+					enrolment = await tx.enrolment.create({
+						data: {
+							tenantId,
+							participantId: participant.id,
+							sessionId: dto.sessionId,
+							locationId: location.id,
+							paymentPlanType: 'FULL',
+							totalFee: totalFee as any,
+							paidAmount: 0 as any,
+							balance: totalFee as any,
+						},
+					});
+				} else {
+					const pos = (await tx.waitlist.count({ where: { tenantId, sessionId: dto.sessionId, locationId: location.id, deletedAt: null } })) + 1;
+					waitlistEntry = await tx.waitlist.create({
+						data: {
+							tenantId,
+							participantId: participant.id,
+							sessionId: dto.sessionId,
+							locationId: location.id,
+							position: pos,
+						},
+					});
+				}
+			}
+
+			return { participant, guardian, enrolment, waitlist: waitlistEntry };
+		});
+
+		return result;
+	}
+
+	async findAll(tenantId: string, user: any, query: FindParticipantsDto) {
+		const { status, locationId, sessionId, search, page = 1, limit = 20, sortBy = 'createdAt', order = 'desc' } = query;
+		const skip = (page - 1) * limit;
+
+		const where: any = { tenantId, deletedAt: null };
+		if (status) where.status = status;
+		if (locationId) where.locationId = locationId;
+
+		if (sessionId) {
+			where.enrolments = { some: { sessionId } };
+		}
+
+		if (search) {
+			where.OR = [
+				{ firstNameEn: { contains: search, mode: 'insensitive' } },
+				{ lastNameEn: { contains: search, mode: 'insensitive' } },
+				{ uniqueId: { contains: search, mode: 'insensitive' } },
+				{ phone: { contains: search, mode: 'insensitive' } },
+			];
+		}
+
+		// Role-based filtering: location manager only sees own location
+		if (user?.role === UserRole.LOCATION_MANAGER && user.locationId) {
+			where.locationId = user.locationId;
+		}
+
+		const [items, total] = await Promise.all([
+			this.prisma.participant.findMany({
+				where,
+				skip,
+				take: limit,
+				orderBy: { [sortBy]: order },
+				include: {
+					location: { select: { id: true, name: true, city: true } },
+				},
+			}),
+			this.prisma.participant.count({ where }),
+		]);
+
+		return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+	}
+
+	async findById(tenantId: string, user: any, id: string) {
+		const participant = await this.prisma.participant.findFirst({
+			where: { id, tenantId, deletedAt: null },
+			include: {
+				location: true,
+				guardians: true,
+				enrolments: { include: { session: true, location: true, invoices: true, payments: true } },
+				documents: true,
+				staffNotes: true,
+			},
+		});
+
+		if (!participant) throw new NotFoundException('Participant not found');
+
+		// Gather payments across enrolments
+		const payments = await this.prisma.payment.findMany({
+			where: { enrolment: { participantId: id } },
+		});
+
+		const response: any = {
+			participant: { ...participant },
+			guardians: participant.guardians || [],
+			enrolments: participant.enrolments || [],
+			documents: participant.documents || [],
+			payments: payments || [],
+		};
+
+		// staffNotes visibility: only users with staff roles (non-guardian) can see
+		const staffRoles = [
+			UserRole.SUPER_ADMIN,
+			UserRole.LOCATION_MANAGER,
+			UserRole.FINANCE_OFFICER,
+			UserRole.STAFF,
+		];
+
+		if (user && staffRoles.includes(user.role)) {
+			response.staffNotes = participant.staffNotes || [];
+		} else {
+			response.staffNotes = [];
+		}
+
+		// Remove relations from participant payload (they are provided separately)
+		delete response.participant.guardians;
+		delete response.participant.enrolments;
+		delete response.participant.documents;
+		delete response.participant.payments;
+		delete response.participant.staffNotes;
+
+		return response;
+	}
+
+	async updateStatus(tenantId: string, id: string, user: any, dto: UpdateParticipantStatusDto) {
+		const participant = await this.prisma.participant.findFirst({ where: { id, tenantId, deletedAt: null } });
+		if (!participant) throw new NotFoundException('Participant not found');
+
+		// Location manager can only update participants in their location
+		if (user.role === UserRole.LOCATION_MANAGER && user.locationId !== participant.locationId) {
+			throw new BadRequestException('Not allowed to update participant in different location');
+		}
+
+		const current = participant.status as unknown as string;
+		const next = dto.status as unknown as string;
+
+		const allowedTransitions: Record<string, string[]> = {
+			INQUIRY: ['DOCUMENTS_PENDING'],
+			DOCUMENTS_PENDING: ['FEE_PENDING'],
+			FEE_PENDING: ['ACTIVE'],
+			ACTIVE: ['ON_HOLD', 'COMPLETED', 'WITHDRAWN'],
+			ON_HOLD: [],
+			COMPLETED: [],
+			WITHDRAWN: [],
+		};
+
+		const allowed = allowedTransitions[current] || [];
+		if (!allowed.includes(next)) {
+			throw new BadRequestException(`Invalid status transition from ${current} to ${next}`);
+		}
+
+		const updated = await this.prisma.participant.update({ where: { id: participant.id }, data: { status: dto.status as any } });
+
+		if (dto.reason && user && user.id) {
+			await this.prisma.staffNote.create({ data: { tenantId, participantId: participant.id, authorId: user.id, note: dto.reason } });
+		}
+
+		return updated;
+	}
+}

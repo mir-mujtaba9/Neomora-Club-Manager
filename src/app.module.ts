@@ -13,6 +13,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { GuardianAuthModule } from './modules/auth/guardian-auth.module.js';
 import { LocationsModule } from './modules/locations/locations.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { ParticipantsModule } from './modules/participants/participants.module.js';
+import { SessionsModule } from './modules/sessions/sessions.module.js';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { UsersModule } from './modules/users/users.module.js';
     AuthModule,
     GuardianAuthModule,
     LocationsModule,
+    SessionsModule,
+    ParticipantsModule,
     UsersModule,
   ],
 })
