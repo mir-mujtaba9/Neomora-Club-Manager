@@ -5,6 +5,7 @@ import { generateUniqueId } from '../../common/utils/unique-id.util.js';
 import { FindParticipantsDto } from './dto/find-participants.dto.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto.js';
+import { CreateStaffNoteDto } from './dto/create-staff-note.dto.js';
 
 @Injectable()
 export class ParticipantsService {
@@ -245,5 +246,59 @@ export class ParticipantsService {
 		}
 
 		return updated;
+	}
+
+	async addStaffNote(tenantId: string, participantId: string, user: any, dto: CreateStaffNoteDto) {
+		const participant = await this.prisma.participant.findFirst({ where: { id: participantId, tenantId, deletedAt: null } });
+		if (!participant) throw new NotFoundException('Participant not found');
+
+		// permission check: location manager only for their location
+		if (user.role === UserRole.LOCATION_MANAGER && user.locationId !== participant.locationId) {
+			throw new BadRequestException('Not allowed to add note for participant in different location');
+		}
+
+		const note = await this.prisma.staffNote.create({ data: { tenantId, participantId: participant.id, authorId: user.id, note: dto.note } });
+		return note;
+	}
+
+	async getPortalByToken(token: string) {
+		const guardian = await this.prisma.guardian.findFirst({
+			where: { portalToken: token, deletedAt: null },
+			include: {
+				participant: {
+					include: {
+						enrolments: {
+							where: { deletedAt: null },
+							include: {
+								session: true,
+								location: true,
+								invoices: { where: { deletedAt: null } },
+							},
+						},
+						// do not include staffNotes
+					},
+				},
+			},
+		});
+
+		if (!guardian) throw new NotFoundException('Portal token not found');
+
+		const participant = guardian.participant;
+
+		// collect invoices across enrolments
+		const invoices = [] as any[];
+		for (const e of participant.enrolments || []) {
+			for (const inv of e.invoices || []) {
+				invoices.push({ amount: inv.amount, dueDate: inv.dueDate, status: inv.status, paymentLink: inv.paymentLink });
+			}
+		}
+
+		const enrolments = (participant.enrolments || []).map((e) => ({ id: e.id, session: { id: e.session?.id, name: e.session?.name }, location: { id: e.location?.id, name: e.location?.name }, status: e.status, enrolledAt: e.enrolledAt }));
+
+		return {
+			participant: { name: `${participant.firstNameEn} ${participant.lastNameEn}`, status: participant.status },
+			invoices,
+			enrolments,
+		};
 	}
 }

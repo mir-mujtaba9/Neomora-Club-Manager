@@ -15,6 +15,7 @@ import { LocationsModule } from './modules/locations/locations.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { ParticipantsModule } from './modules/participants/participants.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
+import { PortalModule } from './modules/portal/portal.module.js';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { SessionsModule } from './modules/sessions/sessions.module.js';
     LocationsModule,
     SessionsModule,
     ParticipantsModule,
+    PortalModule,
     UsersModule,
   ],
 })
