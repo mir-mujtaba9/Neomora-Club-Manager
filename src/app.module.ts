@@ -16,6 +16,7 @@ import { UsersModule } from './modules/users/users.module.js';
 import { ParticipantsModule } from './modules/participants/participants.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { PortalModule } from './modules/portal/portal.module.js';
+import { EnrolmentsModule } from './modules/enrolments/enrolments.module.js';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PortalModule } from './modules/portal/portal.module.js';
     SessionsModule,
     ParticipantsModule,
     PortalModule,
+    EnrolmentsModule,
     UsersModule,
   ],
 })
