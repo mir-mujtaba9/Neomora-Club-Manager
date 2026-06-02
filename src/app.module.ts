@@ -18,6 +18,8 @@ import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { PortalModule } from './modules/portal/portal.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { EnrolmentsModule } from './modules/enrolments/enrolments.module.js';
+import { WaitlistModule } from './modules/waitlist/waitlist.module.js';
+import { ReportingModule } from './modules/reporting/reporting.module.js';
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { EnrolmentsModule } from './modules/enrolments/enrolments.module.js';
     EnrolmentsModule,
     DocumentsModule,
     UsersModule,
+    WaitlistModule,
+    ReportingModule,
   ],
 })
 export class AppModule implements NestModule {
