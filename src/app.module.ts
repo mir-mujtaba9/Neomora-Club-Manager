@@ -20,6 +20,7 @@ import { DocumentsModule } from './modules/documents/documents.module.js';
 import { EnrolmentsModule } from './modules/enrolments/enrolments.module.js';
 import { WaitlistModule } from './modules/waitlist/waitlist.module.js';
 import { ReportingModule } from './modules/reporting/reporting.module.js';
+import { RegistrationModule } from './modules/registration/registration.module.js';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ReportingModule } from './modules/reporting/reporting.module.js';
     UsersModule,
     WaitlistModule,
     ReportingModule,
+    RegistrationModule,
   ],
 })
 export class AppModule implements NestModule {
