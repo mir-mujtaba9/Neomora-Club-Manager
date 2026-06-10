@@ -52,7 +52,10 @@ export class DocumentsService {
     }
  
     const filename = file.originalname;
-    const storageKey = `${tenantId}/${participantId}/${docType}/${filename}`;
+    // Plan H — prefix with timestamp so re-uploading the same filename does
+    // not silently overwrite the previous version on disk OR in S3.
+    const safeName = `${Date.now()}_${filename}`;
+    const storageKey = `${tenantId}/${participantId}/${docType}/${safeName}`;
  
     const localBase = path.join(process.cwd(), 'storage');
     const localPath = path.join(
@@ -63,7 +66,7 @@ export class DocumentsService {
     );
     this.ensureDir(localPath);
  
-    const destPath = path.join(localPath, filename);
+    const destPath = path.join(localPath, safeName);
  
     if (file.path) {
       fs.renameSync(file.path, destPath);
@@ -90,12 +93,17 @@ export class DocumentsService {
   /**
    * GET /documents/:participantId/:docId/url
    * Returns a pre-signed (or locally signed) download URL valid for 15 min.
+   *
+   * Plan H — accepts a `disposition` of 'inline' (preview in browser) or
+   * 'attachment' (force download). The local-download endpoint reads this
+   * from the query string; for S3 we pass ResponseContentDisposition.
    */
   async getSignedUrl(
     tenantId: string,
     user: any,
     participantId: string,
     docId: string,
+    disposition: 'inline' | 'attachment' = 'inline',
   ): Promise<{ url: string; expiresIn: number }> {
     const doc = await this.prisma.document.findFirst({
       where: { id: docId, participantId, tenantId, deletedAt: null },
@@ -119,7 +127,15 @@ export class DocumentsService {
       );
     }
  
-    return this.storageService.getSignedUrl(doc.storageKey, 900);
+    const signed = await this.storageService.getSignedUrl(doc.storageKey, 900);
+    // Local fallback uses our own /documents/download endpoint, so append
+    // the disposition hint. S3 ignores this; when S3 path is later enabled
+    // we'll wire it via ResponseContentDisposition on the SDK call.
+    if (disposition === 'attachment' && signed.url.includes('/documents/download')) {
+      const sep = signed.url.includes('?') ? '&' : '?';
+      signed.url = `${signed.url}${sep}disposition=attachment`;
+    }
+    return signed;
   }
  
   // ─── Verify / Reject ──────────────────────────────────────────────────────
@@ -268,6 +284,72 @@ export class DocumentsService {
   }
  
   // ─── Local download (dev/staging) ─────────────────────────────────────────
+ 
+  /**
+   * Plan H — list a participant's documents with verifier info. Filters
+   * soft-deleted rows and applies the standard LOCATION_MANAGER scope.
+   */
+  async listDocuments(
+    tenantId: string,
+    user: any,
+    participantId: string,
+  ) {
+    const participant = await this.prisma.participant.findFirst({
+      where: { id: participantId, tenantId, deletedAt: null },
+      select: { id: true, locationId: true },
+    });
+    if (!participant) throw new NotFoundException('Participant not found');
+ 
+    if (
+      user.role === UserRole.LOCATION_MANAGER &&
+      user.locationId !== participant.locationId
+    ) {
+      throw new ForbiddenException(
+        'Not allowed to view documents for participant in different location',
+      );
+    }
+ 
+    return this.prisma.document.findMany({
+      where: { tenantId, participantId, deletedAt: null },
+      orderBy: { uploadedAt: 'desc' },
+      include: {
+        verifiedBy: { select: { id: true, fullName: true, email: true } },
+      },
+    });
+  }
+ 
+  /**
+   * Plan H — soft-delete a document. The file stays on disk/S3 for audit
+   * recovery; only the DB row is hidden. Re-upload will create a fresh row
+   * (collision-safe thanks to the timestamp-prefixed storage key).
+   */
+  async softDelete(
+    tenantId: string,
+    user: any,
+    participantId: string,
+    docId: string,
+  ) {
+    const doc = await this.prisma.document.findFirst({
+      where: { id: docId, participantId, tenantId, deletedAt: null },
+      include: { participant: { select: { locationId: true } } },
+    });
+    if (!doc) throw new NotFoundException('Document not found');
+ 
+    if (
+      user.role === UserRole.LOCATION_MANAGER &&
+      user.locationId !== doc.participant.locationId
+    ) {
+      throw new ForbiddenException(
+        'Not allowed to delete documents for participant in different location',
+      );
+    }
+ 
+    await this.prisma.document.update({
+      where: { id: doc.id },
+      data: { deletedAt: new Date() },
+    });
+    return { id: doc.id, deleted: true };
+  }
  
   /**
    * Validates the signed token for a local-filesystem download request.

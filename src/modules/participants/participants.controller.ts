@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, Get, Query, Param, Res, Patch } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Get, Query, Param, Res, Patch, Delete, NotFoundException } from '@nestjs/common';
 import { TenantId } from '../../common/decorators/tenant.decorator.js';
 import { ParticipantsService } from './participants.service.js';
 import { RegisterParticipantDto } from './dto/register-participant.dto.js';
@@ -9,13 +9,24 @@ import { FindParticipantsDto } from './dto/find-participants.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Response } from 'express';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto.js';
+import { CreateStaffNoteDto } from './dto/create-staff-note.dto.js';
+import { ReEnrolDto } from '../enrolments/dto/re-enrol.dto.js';
+import { EnrolmentsService } from '../enrolments/enrolments.service.js';
+import { PrismaService } from '../../infra/database/prisma.service.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 
 @Controller('participants')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ParticipantsController {
-	constructor(private readonly participantsService: ParticipantsService) {}
+	constructor(
+		private readonly participantsService: ParticipantsService,
+		// Plan H Phase 4 — convenience POST /:id/re-enrol delegates to the
+		// real EnrolmentsService.reEnrol after looking up the most-recent
+		// enrolment so the caller doesn't need to know the prior id.
+		private readonly enrolmentsService: EnrolmentsService,
+		private readonly prisma: PrismaService,
+	) {}
 
 	@Public()
 	@Post('register')
@@ -24,6 +35,7 @@ export class ParticipantsController {
 	}
 
 	@Get()
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
 	async findAll(
 		@TenantId() tenantId: string,
 		@CurrentUser() user: any,
@@ -58,6 +70,7 @@ export class ParticipantsController {
 	}
 
 	@Get(':id')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
 	async findById(
 		@TenantId() tenantId: string,
 		@CurrentUser() user: any,
@@ -67,7 +80,7 @@ export class ParticipantsController {
 	}
 
 	@Patch(':id/status')
-	@Roles(UserRole.LOCATION_MANAGER)
+	@Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN, UserRole.FINANCE_OFFICER)
 	async updateStatus(
 		@TenantId() tenantId: string,
 		@CurrentUser() user: any,
@@ -75,5 +88,80 @@ export class ParticipantsController {
 		@Body() dto: UpdateParticipantStatusDto,
 	) {
 		return this.participantsService.updateStatus(tenantId, id, user, dto);
+	}
+
+	// ─── Plan H — Staff notes (F-22) ────────────────────────────────────
+	// Notes are visible to staff only; the @Roles guard keeps guardians out.
+
+	@Get(':id/staff-notes')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+	async listStaffNotes(
+		@TenantId() tenantId: string,
+		@CurrentUser() user: any,
+		@Param('id') id: string,
+	) {
+		return this.participantsService.listStaffNotes(tenantId, id, user);
+	}
+
+	@Post(':id/staff-notes')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+	async addStaffNote(
+		@TenantId() tenantId: string,
+		@CurrentUser() user: any,
+		@Param('id') id: string,
+		@Body() dto: CreateStaffNoteDto,
+	) {
+		return this.participantsService.addStaffNote(tenantId, id, user, dto);
+	}
+
+	@Delete(':id/staff-notes/:noteId')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+	async deleteStaffNote(
+		@TenantId() tenantId: string,
+		@CurrentUser() user: any,
+		@Param('id') id: string,
+		@Param('noteId') noteId: string,
+	) {
+		return this.participantsService.deleteStaffNote(tenantId, id, noteId, user);
+	}
+
+	// ─── Plan H — Status history (F-20) ─────────────────────────────────
+
+	@Get(':id/status-history')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+	async getStatusHistory(
+		@TenantId() tenantId: string,
+		@CurrentUser() user: any,
+		@Param('id') id: string,
+	) {
+		return this.participantsService.getStatusHistory(tenantId, id, user);
+	}
+
+	// ─── Plan H — Convenience re-enrol (F-24) ───────────────────────────
+	// EnrolmentsService.reEnrol requires the previous enrolment id; this
+	// route looks it up automatically (most-recent enrolment for the
+	// participant) so a single click in the staff UI can re-enrol them
+	// into a new session. Real work happens in EnrolmentsService.reEnrol
+	// which already enforces overlap + duplicate-active rules.
+	@Post(':id/re-enrol')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.STAFF)
+	async reEnrol(
+		@TenantId() tenantId: string,
+		@CurrentUser() user: any,
+		@Param('id') id: string,
+		@Body() dto: ReEnrolDto,
+		@Query('allowOverlap') allowOverlap?: string,
+	) {
+		const previous = await this.prisma.enrolment.findFirst({
+			where: { tenantId, participantId: id, deletedAt: null },
+			orderBy: { enrolledAt: 'desc' },
+			select: { id: true },
+		});
+		if (!previous) {
+			throw new NotFoundException('No previous enrolment found for this participant');
+		}
+		return this.enrolmentsService.reEnrol(tenantId, user, previous.id, dto, {
+			allowOverlap: allowOverlap === 'true',
+		});
 	}
 }

@@ -5,6 +5,7 @@ import { generateUniqueId } from '../../common/utils/unique-id.util.js';
 import { nextTenantSequence } from '../../common/utils/tenant-sequence.util.js';
 import { EnrolmentAllocatorService } from '../enrolments/enrolment-allocator.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { FindParticipantsDto } from './dto/find-participants.dto.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 import { PaymentPlanType } from '../../common/constants/payment-plan-type.constants.js';
@@ -17,6 +18,7 @@ export class ParticipantsService {
 		private readonly prisma: PrismaService,
 		private readonly allocator: EnrolmentAllocatorService,
 		private readonly notifications: NotificationsService,
+		private readonly storage: StorageService,
 	) {}
 
 	async register(dto: RegisterParticipantDto) {
@@ -143,15 +145,50 @@ export class ParticipantsService {
 	}
 
 	async findAll(tenantId: string, user: any, query: FindParticipantsDto) {
-		const { status, locationId, sessionId, search, page = 1, limit = 20, sortBy = 'createdAt', order = 'desc' } = query;
+		const {
+			status,
+			locationId,
+			sessionId,
+			paymentPlanType,
+			dateFrom,
+			dateTo,
+			search,
+			page = 1,
+			limit = 20,
+			sortBy = 'createdAt',
+			order = 'desc',
+		} = query;
 		const skip = (page - 1) * limit;
 
 		const where: any = { tenantId, deletedAt: null };
 		if (status) where.status = status;
 		if (locationId) where.locationId = locationId;
 
-		if (sessionId) {
-			where.enrolments = { some: { sessionId } };
+		// Plan I (F-26) — sessionId + paymentPlanType both target the same
+		// enrolments relation, so AND them inside a single `some` clause to
+		// avoid matching participants where the conditions live on different
+		// enrolments (which would happen if we wrote two separate `some`s).
+		if (sessionId || paymentPlanType) {
+			const enrolmentFilter: any = {};
+			if (sessionId) enrolmentFilter.sessionId = sessionId;
+			if (paymentPlanType) enrolmentFilter.paymentPlanType = paymentPlanType;
+			where.enrolments = { some: enrolmentFilter };
+		}
+
+		// Plan I (F-26) — date range on participant.createdAt. Date-only
+		// upper bound is bumped to end-of-day so the UI doesn't need to
+		// know about the 23:59:59 convention.
+		if (dateFrom || dateTo) {
+			const createdAt: any = {};
+			if (dateFrom) createdAt.gte = new Date(dateFrom);
+			if (dateTo) {
+				const upper = new Date(dateTo);
+				if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+					upper.setHours(23, 59, 59, 999);
+				}
+				createdAt.lte = upper;
+			}
+			where.createdAt = createdAt;
 		}
 
 		if (search) {
@@ -189,26 +226,66 @@ export class ParticipantsService {
 			where: { id, tenantId, deletedAt: null },
 			include: {
 				location: true,
-				guardians: true,
-				enrolments: { include: { session: true, location: true, invoices: true, payments: true } },
-				documents: true,
-				staffNotes: true,
+				guardians: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' } },
+				// Plan H — newest enrolment first so session history reads top-down.
+				enrolments: {
+					where: { deletedAt: null },
+					orderBy: { enrolledAt: 'desc' },
+					include: {
+						session: true,
+						location: true,
+						invoices: { where: { deletedAt: null }, orderBy: { dueDate: 'asc' } },
+						payments: { orderBy: { createdAt: 'desc' } },
+					},
+				},
+				documents: { where: { deletedAt: null }, orderBy: { uploadedAt: 'desc' } },
+				// Plan H — include author name so the UI doesn't need a second hop.
+				staffNotes: {
+					where: { deletedAt: null },
+					orderBy: { createdAt: 'desc' },
+					include: { author: { select: { id: true, fullName: true, email: true } } },
+				},
 			},
 		});
 
 		if (!participant) throw new NotFoundException('Participant not found');
 
-		// Gather payments across enrolments
+		// Plan H — collapse payments across enrolments AND compute a per-enrolment
+		// summary so the 360° view shows finance state at a glance.
+		const enrolmentsWithSummary = (participant.enrolments || []).map((e: any) => {
+			const completed = (e.payments || []).filter((p: any) => p.status === 'COMPLETED');
+			const totalPaid = completed.reduce(
+				(sum: number, p: any) => sum + Number(p.amount),
+				0,
+			);
+			const totalInvoiced = (e.invoices || []).reduce(
+				(sum: number, inv: any) => sum + Number(inv.amount),
+				0,
+			);
+			return {
+				...e,
+				paymentSummary: {
+					totalInvoiced: totalInvoiced.toFixed(2),
+					totalPaid: totalPaid.toFixed(2),
+					outstanding: (totalInvoiced - totalPaid).toFixed(2),
+					lastPaymentAt: completed[0]?.createdAt ?? null,
+				},
+			};
+		});
+
+		// Flat list of payments across enrolments (newest-first) for the
+		// summary card. Mirrors the previous behaviour.
 		const payments = await this.prisma.payment.findMany({
 			where: { enrolment: { participantId: id } },
+			orderBy: { createdAt: 'desc' },
 		});
 
 		const response: any = {
 			participant: { ...participant },
 			guardians: participant.guardians || [],
-			enrolments: participant.enrolments || [],
+			enrolments: enrolmentsWithSummary,
 			documents: participant.documents || [],
-			payments: payments || [],
+			payments,
 		};
 
 		// staffNotes visibility: only users with staff roles (non-guardian) can see
@@ -296,6 +373,23 @@ export class ParticipantsService {
 
 		const updated = await this.prisma.participant.update({ where: { id: participant.id }, data: { status: dto.status as any } });
 
+		// Plan H — every transition writes an AuditLog row so the
+		// status-history endpoint can reconstruct the participant's timeline.
+		// Best-effort: if the audit insert fails we still return the update.
+		await this.prisma.auditLog
+			.create({
+				data: {
+					tenantId,
+					userId: user?.id ?? user?.sub ?? null,
+					action: 'PARTICIPANT_STATUS_CHANGED',
+					resource: 'participant',
+					resourceId: participant.id,
+					beforeState: { status: current } as any,
+					afterState: { status: next, reason: dto.reason ?? null } as any,
+				},
+			})
+			.catch(() => undefined);
+
 		if (dto.reason && user && user.id) {
 			await this.prisma.staffNote.create({ data: { tenantId, participantId: participant.id, authorId: user.id, note: dto.reason } });
 		}
@@ -312,8 +406,126 @@ export class ParticipantsService {
 			throw new BadRequestException('Not allowed to add note for participant in different location');
 		}
 
-		const note = await this.prisma.staffNote.create({ data: { tenantId, participantId: participant.id, authorId: user.id, note: dto.note } });
+		const note = await this.prisma.staffNote.create({
+			data: { tenantId, participantId: participant.id, authorId: user.id, note: dto.note },
+			include: { author: { select: { id: true, fullName: true, email: true } } },
+		});
 		return note;
+	}
+
+	/**
+	 * Plan H — list staff notes for a participant, newest-first, with author
+	 * details. Guardians never get here (route is role-gated) but we still
+	 * return an empty list for non-staff to keep the response shape stable.
+	 */
+	async listStaffNotes(tenantId: string, participantId: string, user: any) {
+		const participant = await this.prisma.participant.findFirst({
+			where: { id: participantId, tenantId, deletedAt: null },
+			select: { id: true, locationId: true },
+		});
+		if (!participant) throw new NotFoundException('Participant not found');
+
+		if (
+			user?.role === UserRole.LOCATION_MANAGER &&
+			user.locationId !== participant.locationId
+		) {
+			return [];
+		}
+
+		return this.prisma.staffNote.findMany({
+			where: { tenantId, participantId, deletedAt: null },
+			orderBy: { createdAt: 'desc' },
+			include: { author: { select: { id: true, fullName: true, email: true } } },
+		});
+	}
+
+	/**
+	 * Plan H — soft-delete a staff note. Only the original author or a
+	 * SUPER_ADMIN may delete; this matches the "my notes" expectation while
+	 * leaving an escape hatch for admin clean-up.
+	 */
+	async deleteStaffNote(
+		tenantId: string,
+		participantId: string,
+		noteId: string,
+		user: any,
+	) {
+		const note = await this.prisma.staffNote.findFirst({
+			where: { id: noteId, tenantId, participantId, deletedAt: null },
+		});
+		if (!note) throw new NotFoundException('Staff note not found');
+
+		const isAuthor = user?.id === note.authorId;
+		const isAdmin = user?.role === UserRole.SUPER_ADMIN;
+		if (!isAuthor && !isAdmin) {
+			throw new BadRequestException('Only the author or a super admin may delete this note');
+		}
+
+		await this.prisma.staffNote.update({
+			where: { id: noteId },
+			data: { deletedAt: new Date() },
+		});
+		return { id: noteId, deleted: true };
+	}
+
+	/**
+	 * Plan H — reconstruct the participant's status timeline from AuditLog
+	 * rows written by `updateStatus` and `AutoPromotionService.tryPromote`.
+	 * Falls back to a single "CREATED" entry derived from `createdAt` when
+	 * no audit rows exist yet (participants that pre-date Plan H).
+	 */
+	async getStatusHistory(tenantId: string, participantId: string, user: any) {
+		const participant = await this.prisma.participant.findFirst({
+			where: { id: participantId, tenantId, deletedAt: null },
+			select: { id: true, status: true, locationId: true, createdAt: true },
+		});
+		if (!participant) throw new NotFoundException('Participant not found');
+
+		if (
+			user?.role === UserRole.LOCATION_MANAGER &&
+			user.locationId !== participant.locationId
+		) {
+			throw new BadRequestException('Not allowed to view history for participant in different location');
+		}
+
+		const auditRows = await this.prisma.auditLog.findMany({
+			where: {
+				tenantId,
+				resource: 'participant',
+				resourceId: participantId,
+				action: { in: ['PARTICIPANT_STATUS_CHANGED', 'AUTO_PROMOTED_TO_ACTIVE'] },
+			},
+			orderBy: { createdAt: 'asc' },
+			include: { user: { select: { id: true, fullName: true, email: true } } },
+		});
+
+		const timeline = auditRows.map((row) => ({
+			at: row.createdAt,
+			action: row.action,
+			from: (row.beforeState as any)?.status ?? null,
+			to: (row.afterState as any)?.status ?? null,
+			reason: (row.afterState as any)?.reason ?? null,
+			actor: row.user
+				? { id: row.user.id, fullName: row.user.fullName, email: row.user.email }
+				: { id: row.userId, fullName: 'system', email: null },
+		}));
+
+		// Always include the synthetic "REGISTERED" entry at the top so the
+		// timeline starts from a known point even for pre-Plan-H records.
+		timeline.unshift({
+			at: participant.createdAt,
+			action: 'PARTICIPANT_REGISTERED',
+			from: null,
+			to: 'INQUIRY',
+			reason: null,
+			actor: { id: null, fullName: 'system', email: null },
+		});
+
+		return {
+			participantId,
+			currentStatus: participant.status,
+			timeline,
+		};
 	}
 
 	async getPortalByToken(token: string) {
@@ -328,9 +540,12 @@ export class ParticipantsService {
 								session: true,
 								location: true,
 								invoices: { where: { deletedAt: null } },
+								// Plan H — pull payments here so the guardian sees their
+								// full payment history without a second query.
+								payments: { orderBy: { createdAt: 'desc' } },
 							},
 						},
-						// do not include staffNotes
+						// staffNotes intentionally NOT loaded — guardian-private payload.
 					},
 				},
 			},
@@ -340,20 +555,87 @@ export class ParticipantsService {
 
 		const participant = guardian.participant;
 
-		// collect invoices across enrolments
-		const invoices = [] as any[];
+		// Plan H — split invoices into upcoming / overdue / paid so the
+		// portal UI doesn't need to compute due-date logic client-side.
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+
+		const upcomingInvoices: any[] = [];
+		const overdueInvoices: any[] = [];
+		const paidInvoices: any[] = [];
+
+		// Plan H — collect a flat payment history list with signed receipt
+		// URLs. Only COMPLETED payments are surfaced to guardians; pending /
+		// rejected ones stay internal to staff.
+		const paymentHistory: any[] = [];
+
 		for (const e of participant.enrolments || []) {
 			for (const inv of e.invoices || []) {
-				invoices.push({ amount: inv.amount, dueDate: inv.dueDate, status: inv.status, paymentLink: inv.paymentLink });
+				const row = {
+					invoiceNumber: inv.invoiceNumber,
+					amount: inv.amount,
+					dueDate: inv.dueDate,
+					status: inv.status,
+					paymentLink: inv.paymentLink,
+				};
+				if (inv.status === 'PAID') {
+					paidInvoices.push(row);
+				} else if (inv.dueDate < today) {
+					overdueInvoices.push(row);
+				} else {
+					upcomingInvoices.push(row);
+				}
+			}
+
+			for (const p of e.payments || []) {
+				if (p.status !== 'COMPLETED') continue;
+				let receiptUrl: string | null = null;
+				if (p.receiptKey) {
+					try {
+						const signed = await this.storage.getSignedUrl(p.receiptKey, 7 * 24 * 3600);
+						receiptUrl = signed.url;
+					} catch {
+						// Signing failure shouldn't kill the whole portal payload —
+						// just omit the URL and let the guardian retry later.
+					}
+				}
+				paymentHistory.push({
+					id: p.id,
+					amount: p.amount,
+					method: p.method,
+					gateway: p.gateway,
+					paidAt: p.paidAt ?? p.createdAt,
+					receiptUrl,
+				});
 			}
 		}
 
-		const enrolments = (participant.enrolments || []).map((e) => ({ id: e.id, session: { id: e.session?.id, name: e.session?.name }, location: { id: e.location?.id, name: e.location?.name }, status: e.status, enrolledAt: e.enrolledAt }));
+		// Stable chronological order (newest-first) regardless of which
+		// enrolment the payment came from.
+		paymentHistory.sort(
+			(a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime(),
+		);
+
+		const enrolments = (participant.enrolments || []).map((e) => ({
+			id: e.id,
+			session: { id: e.session?.id, name: e.session?.name },
+			location: { id: e.location?.id, name: e.location?.name },
+			status: e.status,
+			enrolledAt: e.enrolledAt,
+		}));
 
 		return {
-			participant: { name: `${participant.firstNameEn} ${participant.lastNameEn}`, status: participant.status },
-			invoices,
+			participant: {
+				name: `${participant.firstNameEn} ${participant.lastNameEn}`,
+				status: participant.status,
+			},
 			enrolments,
+			invoices: {
+				upcoming: upcomingInvoices,
+				overdue: overdueInvoices,
+				paid: paidInvoices,
+			},
+			paymentHistory,
 		};
 	}
 }

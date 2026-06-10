@@ -136,6 +136,7 @@ enum NotificationType {
   WAITLIST_OFFER
   BROADCAST
   STAFF_ALERT
+  GUARDIAN_MAGIC_LINK
 }
 
 enum NotificationStatus {

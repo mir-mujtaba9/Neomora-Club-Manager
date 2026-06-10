@@ -1,4 +1,4 @@
-import { IsOptional, IsUUID, Matches, IsInt, Min, Max } from 'class-validator';
+import { IsOptional, IsUUID, Matches, IsInt, Min, Max, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class FindFeesReportDto {
@@ -13,6 +13,14 @@ export class FindFeesReportDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}$/, { message: 'month must be in YYYY-MM format' })
   month?: string;
+
+  /**
+   * Plan I (F-27) — grouping dimension. Default 'location' preserves
+   * pre-Plan-I behaviour; 'session' pivots aggregations across sessions.
+   */
+  @IsOptional()
+  @IsIn(['location', 'session'])
+  groupBy?: 'location' | 'session';
 
   @IsOptional()
   @Type(() => Number)

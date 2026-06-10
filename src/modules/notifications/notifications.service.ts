@@ -335,6 +335,52 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Plan H — sends a guardian portal magic link via WhatsApp (or email
+   * fallback when no phone is on file). Dedupe key includes the token so
+   * each requested link is delivered exactly once.
+   */
+  async enqueueGuardianMagicLink(input: {
+    tenantId: string;
+    guardianId: string;
+    guardianFullName: string;
+    guardianLang: string;
+    guardianPhone: string | null;
+    guardianEmail: string | null;
+    magicLinkUrl: string;
+    expiresIn: string;
+    token: string;
+  }): Promise<void> {
+    try {
+      const lang: SupportedLang = input.guardianLang === 'ar' ? 'ar' : 'en';
+      const body = renderTemplate('GUARDIAN_MAGIC_LINK', lang, {
+        guardianName: input.guardianFullName,
+        magicLinkUrl: input.magicLinkUrl,
+        expiresIn: input.expiresIn,
+      });
+
+      const channel = input.guardianPhone
+        ? NotificationChannel.WHATSAPP
+        : NotificationChannel.EMAIL;
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.GUARDIAN_MAGIC_LINK,
+        channel,
+        recipientPhone: input.guardianPhone,
+        recipientEmail: input.guardianEmail,
+        bodyText: body,
+        // Token uniqueness already guarantees one-link-one-delivery.
+        dedupeKey: `guardian-magic-link:${input.token}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `[enqueueGuardianMagicLink] failed for guardian=${input.guardianId}: ${(err as Error)?.message}`,
+        (err as Error)?.stack,
+      );
+    }
+  }
+
   // ─── Admin / ops endpoints (back NotificationsController) ────────────
 
   async findAll(tenantId: string, user: { role: UserRole; locationId?: string | null; id: string }, query: FindNotificationsDto) {

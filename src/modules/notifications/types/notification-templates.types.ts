@@ -15,7 +15,8 @@ export type TemplateKey =
   | 'WAITLIST_OFFER'
   | 'FEE_INVOICE'
   | 'PAYMENT_REMINDER'
-  | 'PAYMENT_CONFIRM';
+  | 'PAYMENT_CONFIRM'
+  | 'GUARDIAN_MAGIC_LINK';
 
 /**
  * Shape of variables expected by each template. Renderers receive this
@@ -105,6 +106,18 @@ export interface TemplateVarsByKey {
     paymentMethod: string;
     /** Empty string when receipt is pending. */
     receiptUrl: string;
+  };
+  /**
+   * Sent when a guardian requests a portal magic link. Contains a
+   * single-use URL valid for ~15 minutes. The guardian's
+   * NotificationsService caller is responsible for shortening the URL
+   * if the channel imposes character limits.
+   */
+  GUARDIAN_MAGIC_LINK: {
+    guardianName: string;
+    magicLinkUrl: string;
+    /** Human-friendly TTL hint, e.g. "15 minutes". */
+    expiresIn: string;
   };
 }
 

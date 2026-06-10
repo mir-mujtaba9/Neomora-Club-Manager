@@ -9,6 +9,7 @@ import { ReportingService } from './reporting.service.js';
 import { FindFeesReportDto } from './dto/find-fees-report.dto.js';
 import { FindFunnelReportDto } from './dto/find-funnel-report.dto.js';
 import { FindRevenueReportDto } from './dto/find-revenue-report.dto.js';
+import { FindCapacityUtilisationDto } from './dto/find-capacity-utilisation.dto.js';
 
 @Controller('reporting')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,12 +31,15 @@ export class ReportingController {
   }
 
   @Get('fees')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_OFFICER)
+  // Plan I (F-27) — LM joins so they can audit their own location's fees.
+  // Service silently overrides query.locationId with user.locationId for LM.
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER)
   async getFeesReport(
     @TenantId() tenantId: string,
+    @CurrentUser() user: any,
     @Query() query: FindFeesReportDto,
   ) {
-    return this.reportingService.getFeesReport(tenantId, query);
+    return this.reportingService.getFeesReport(tenantId, user, query);
   }
 
   @Get('funnel')
@@ -54,11 +58,33 @@ export class ReportingController {
   }
 
   @Get('revenue')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_OFFICER)
+  // Plan I — same LM treatment as fees.
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER)
   async getRevenueReport(
     @TenantId() tenantId: string,
+    @CurrentUser() user: any,
     @Query() query: FindRevenueReportDto,
   ) {
-    return this.reportingService.getRevenueReport(tenantId, query);
+    return this.reportingService.getRevenueReport(tenantId, user, query);
+  }
+
+  /**
+   * Plan I (F-29) — capacity utilisation time-series.
+   * Returns one series per location with bucketed used/capacity/percent
+   * datapoints suitable for a stacked-area / line chart.
+   */
+  @Get('capacity-utilisation')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.LOCATION_MANAGER,
+    UserRole.FINANCE_OFFICER,
+    UserRole.STAFF,
+  )
+  async getCapacityUtilisation(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Query() query: FindCapacityUtilisationDto,
+  ) {
+    return this.reportingService.getCapacityUtilisationOverTime(tenantId, user, query);
   }
 }

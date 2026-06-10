@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -103,13 +104,65 @@ export class DocumentsController {
     @CurrentUser() user: any,
     @Param('participantId') participantId: string,
     @Param('docId') docId: string,
+    @Query('disposition') disposition?: string,
   ) {
+    const d: 'inline' | 'attachment' =
+      disposition === 'attachment' ? 'attachment' : 'inline';
     return this.documentsService.getSignedUrl(
       tenantId,
       user,
       participantId,
       docId,
+      d,
     );
+  }
+ 
+  // ─── Plan H — list a participant's documents (F-21) ──────────────────
+ 
+  /**
+   * GET /api/v1/documents/by-participant/:participantId
+   *
+   * Returns all non-deleted documents for the participant, newest-first,
+   * with verifier user info attached. Useful for the records UI without
+   * forcing a full `GET /participants/:id`.
+   *
+   * The path uses `/by-participant/:id` instead of `/:id` to avoid
+   * colliding with the public `/documents/download` route (Express matches
+   * routes in definition order, and `download` would otherwise match
+   * `:participantId='download'`).
+   */
+  @Get('by-participant/:participantId')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.LOCATION_MANAGER,
+    UserRole.FINANCE_OFFICER,
+    UserRole.STAFF,
+  )
+  async listForParticipant(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('participantId') participantId: string,
+  ) {
+    return this.documentsService.listDocuments(tenantId, user, participantId);
+  }
+ 
+  // ─── Plan H — soft-delete a document (F-21) ─────────────────────────
+ 
+  /**
+   * DELETE /api/v1/documents/:participantId/:docId
+   *
+   * Soft-deletes the document. The file remains on disk/S3 for audit
+   * recovery; only the DB row is hidden from listings.
+   */
+  @Delete(':participantId/:docId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER)
+  async deleteDocument(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('participantId') participantId: string,
+    @Param('docId') docId: string,
+  ) {
+    return this.documentsService.softDelete(tenantId, user, participantId, docId);
   }
  
   // ─── PATCH verify / reject ────────────────────────────────────────────────
@@ -164,6 +217,7 @@ export class DocumentsController {
     @Query('key') key: string,
     @Query('token') token: string,
     @Query('exp') exp: string,
+    @Query('disposition') disposition: string | undefined,
     @Res() res: Response,
   ) {
     if (!key || !token || !exp) {
@@ -178,7 +232,9 @@ export class DocumentsController {
     );
  
     const filename = path.basename(storageKey);
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    // Plan H — honour optional disposition; default to inline (preview).
+    const d = disposition === 'attachment' ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${d}; filename="${filename}"`);
     res.setHeader('Cache-Control', 'private, no-store');
  
     const stream = fs.createReadStream(filePath);

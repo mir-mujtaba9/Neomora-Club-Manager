@@ -1,15 +1,19 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../infra/database/prisma.service.js';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
 import { RequestLinkDto } from './dto/request-link.dto.js';
 import { VerifyLinkDto } from './dto/verify-link.dto.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 @Injectable()
 export class GuardianAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async requestLink(dto: RequestLinkDto) {
@@ -22,7 +26,9 @@ export class GuardianAuthService {
 
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    // Find guardian by email or phone within tenant
+    // Find guardian by email or phone within tenant. We need full guardian
+    // context here (not just id) so we can render + send the magic-link
+    // notification with the correct name + language.
     const guardian = await this.prisma.guardian.findFirst({
       where: {
         tenantId: tenant.id,
@@ -32,12 +38,14 @@ export class GuardianAuthService {
         ].filter(cond => Object.keys(cond).length > 0),
         deletedAt: null,
       },
-      select: { id: true },
+      include: {
+        participant: { select: { preferredLang: true } },
+      },
     });
 
     if (!guardian) {
-      // For security, don't reveal if guardian exists. 
-      // In production, you'd trigger an email/SMS here if found.
+      // Don't reveal whether the guardian exists. Same response shape
+      // in both branches keeps timing attacks ineffective.
       return { success: true, message: 'If you are registered, a link has been sent.' };
     }
 
@@ -52,12 +60,30 @@ export class GuardianAuthService {
       },
     });
 
-    // TODO: Integrate with Notification Service to send the link
-    // For now, return it in the response for development/testing
+    // Plan H — dispatch via NotificationsService (WhatsApp first, email
+    // fallback). The stub channels log instead of actually sending until
+    // real provider creds land; this means dev/staging still works.
+    const webBaseUrl = this.config.get<string>('app.webBaseUrl', 'http://localhost:5173');
+    const magicLinkUrl = `${webBaseUrl}/guardian-auth/verify?token=${portalToken}`;
+    const isProd = this.config.get<string>('app.nodeEnv') === 'production';
+
+    await this.notifications.enqueueGuardianMagicLink({
+      tenantId: tenant.id,
+      guardianId: guardian.id,
+      guardianFullName: guardian.fullName,
+      guardianLang: guardian.participant?.preferredLang ?? 'en',
+      guardianPhone: guardian.phone,
+      guardianEmail: guardian.email,
+      magicLinkUrl,
+      expiresIn: '15 minutes',
+      token: portalToken,
+    });
+
     return {
       success: true,
       message: 'Magic link generated',
-      dev_link: `/guardian-auth/verify?token=${portalToken}`, // Only for dev
+      // Dev/staging only — prod NEVER returns the link in the response.
+      ...(isProd ? {} : { dev_link: magicLinkUrl }),
     };
   }
 

@@ -93,6 +93,12 @@ const REGISTRY: {
         ? `مرحباً ${v.guardianName}، تم استلام دفعتكم بمبلغ ${v.amount} لـ ${v.participantName} عبر ${v.paymentMethod}. الإيصال: ${v.receiptUrl}`
         : `مرحباً ${v.guardianName}، تم استلام دفعتكم بمبلغ ${v.amount} لـ ${v.participantName} عبر ${v.paymentMethod}. سيكون الإيصال متاحاً قريباً.`,
   },
+  GUARDIAN_MAGIC_LINK: {
+    en: (v) =>
+      `Hi ${v.guardianName}, here is your secure portal link (valid for ${v.expiresIn}):\n${v.magicLinkUrl}\n\nIf you did not request this, please ignore this message.`,
+    ar: (v) =>
+      `مرحباً ${v.guardianName}، إليك رابط بوابة ولي الأمر الآمن (صالح لمدة ${v.expiresIn}):\n${v.magicLinkUrl}\n\nإذا لم تطلب هذا، فضلاً تجاهل هذه الرسالة.`,
+  },
 };
 
 /**

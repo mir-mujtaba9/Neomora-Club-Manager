@@ -3,6 +3,7 @@ import { GuardianAuthController } from './guardian-auth.controller.js';
 import { GuardianAuthService } from './guardian-auth.service.js';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 
 @Module({
   imports: [
@@ -13,6 +14,9 @@ import { ConfigService } from '@nestjs/config';
         signOptions: { expiresIn: '2h' }, // Guardian sessions are typically shorter
       }),
     }),
+    // Plan H — GuardianAuthService dispatches the magic-link message via
+    // the WhatsApp/email stub channels managed by NotificationsService.
+    NotificationsModule,
   ],
   controllers: [GuardianAuthController],
   providers: [GuardianAuthService],
