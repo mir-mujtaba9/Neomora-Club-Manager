@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infra/database/prisma.service.js';
+import { EnrolmentAllocatorService } from './enrolment-allocator.service.js';
 import { CreateEnrolmentDto } from './dto/create-enrolment.dto.js';
 import { ReEnrolDto } from './dto/re-enrol.dto.js';
 import { FindEnrolmentsDto } from './dto/find-enrolments.dto.js';
@@ -7,7 +8,10 @@ import { UserRole } from '../../common/constants/user-role.constants.js';
 
 @Injectable()
 export class EnrolmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly allocator: EnrolmentAllocatorService,
+  ) {}
 
   async enrol(tenantId: string, user: any, dto: CreateEnrolmentDto) {
     const participant = await this.prisma.participant.findFirst({
@@ -78,58 +82,21 @@ export class EnrolmentsService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // Calculate capacity
-      const occupied = await tx.enrolment.count({
-        where: {
-          tenantId,
-          sessionId: dto.sessionId,
-          locationId: dto.locationId,
-          deletedAt: null,
-          status: { notIn: ['WAITLISTED', 'WITHDRAWN'] },
-        },
+      // Allocator handles capacity check + enrolment/waitlist creation under
+      // a transaction-scoped advisory lock keyed by (sessionId, locationId),
+      // so parallel calls cannot overbook the session.
+      const allocation = await this.allocator.allocate(tx, {
+        tenantId,
+        participantId: dto.participantId,
+        sessionId: dto.sessionId,
+        locationId: dto.locationId,
+        paymentPlanType: dto.paymentPlanType,
       });
 
-      if (occupied < location.capacity) {
-        const feeOverride = session.sessionLocations[0]?.feeOverride;
-        const totalFee = feeOverride !== undefined && feeOverride !== null ? feeOverride : session.baseFee;
-
-        const enrolment = await tx.enrolment.create({
-          data: {
-            tenantId,
-            participantId: dto.participantId,
-            sessionId: dto.sessionId,
-            locationId: dto.locationId,
-            paymentPlanType: dto.paymentPlanType as any,
-            totalFee: totalFee as any,
-            paidAmount: 0 as any,
-            balance: totalFee as any,
-            status: 'FEE_PENDING',
-          },
-        });
-
-        return { status: 'ENROLLED', enrolment };
-      } else {
-        const pos = await tx.waitlist.count({
-          where: {
-            tenantId,
-            sessionId: dto.sessionId,
-            locationId: dto.locationId,
-            deletedAt: null,
-          },
-        }) + 1;
-
-        const waitlistEntry = await tx.waitlist.create({
-          data: {
-            tenantId,
-            participantId: dto.participantId,
-            sessionId: dto.sessionId,
-            locationId: dto.locationId,
-            position: pos,
-          },
-        });
-
-        return { status: 'WAITLISTED', waitlist: waitlistEntry };
+      if (allocation.outcome === 'ENROLLED') {
+        return { status: 'ENROLLED', enrolment: allocation.enrolment };
       }
+      return { status: 'WAITLISTED', waitlist: allocation.waitlist };
     });
 
     return result;
@@ -211,59 +178,22 @@ export class EnrolmentsService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // Calculate capacity
-      const occupied = await tx.enrolment.count({
-        where: {
-          tenantId,
-          sessionId: dto.sessionId,
-          locationId,
-          deletedAt: null,
-          status: { notIn: ['WAITLISTED', 'WITHDRAWN'] },
-        },
+      // Allocator handles capacity check + enrolment/waitlist creation under
+      // a transaction-scoped advisory lock. reEnrolledFromId is threaded
+      // through so the new enrolment row tracks its predecessor.
+      const allocation = await this.allocator.allocate(tx, {
+        tenantId,
+        participantId,
+        sessionId: dto.sessionId,
+        locationId,
+        paymentPlanType: dto.paymentPlanType,
+        reEnrolledFromId: previousEnrolmentId,
       });
 
-      if (occupied < location.capacity) {
-        const feeOverride = session.sessionLocations[0]?.feeOverride;
-        const totalFee = feeOverride !== undefined && feeOverride !== null ? feeOverride : session.baseFee;
-
-        const enrolment = await tx.enrolment.create({
-          data: {
-            tenantId,
-            participantId,
-            sessionId: dto.sessionId,
-            locationId,
-            paymentPlanType: dto.paymentPlanType as any,
-            totalFee: totalFee as any,
-            paidAmount: 0 as any,
-            balance: totalFee as any,
-            status: 'FEE_PENDING',
-            reEnrolledFromId: previousEnrolmentId,
-          },
-        });
-
-        return { status: 'ENROLLED', enrolment };
-      } else {
-        const pos = await tx.waitlist.count({
-          where: {
-            tenantId,
-            sessionId: dto.sessionId,
-            locationId,
-            deletedAt: null,
-          },
-        }) + 1;
-
-        const waitlistEntry = await tx.waitlist.create({
-          data: {
-            tenantId,
-            participantId,
-            sessionId: dto.sessionId,
-            locationId,
-            position: pos,
-          },
-        });
-
-        return { status: 'WAITLISTED', waitlist: waitlistEntry };
+      if (allocation.outcome === 'ENROLLED') {
+        return { status: 'ENROLLED', enrolment: allocation.enrolment };
       }
+      return { status: 'WAITLISTED', waitlist: allocation.waitlist };
     });
 
     return result;

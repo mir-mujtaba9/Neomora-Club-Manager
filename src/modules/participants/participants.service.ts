@@ -2,14 +2,20 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../infra/database/prisma.service.js';
 import { RegisterParticipantDto } from './dto/register-participant.dto.js';
 import { generateUniqueId } from '../../common/utils/unique-id.util.js';
+import { nextTenantSequence } from '../../common/utils/tenant-sequence.util.js';
+import { EnrolmentAllocatorService } from '../enrolments/enrolment-allocator.service.js';
 import { FindParticipantsDto } from './dto/find-participants.dto.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
+import { PaymentPlanType } from '../../common/constants/payment-plan-type.constants.js';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto.js';
 import { CreateStaffNoteDto } from './dto/create-staff-note.dto.js';
 
 @Injectable()
 export class ParticipantsService {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(
+		private readonly prisma: PrismaService,
+		private readonly allocator: EnrolmentAllocatorService,
+	) {}
 
 	async register(dto: RegisterParticipantDto) {
 		const slug = dto.locationSlug;
@@ -24,14 +30,15 @@ export class ParticipantsService {
 
 		const tenantId = location.tenantId;
 
-		// generate a unique participant uniqueId within tenant
-		const count = await this.prisma.participant.count({ where: { tenantId } });
-		const uniqueId = generateUniqueId('P', count + 1);
-
 		const dob = new Date(dto.dateOfBirth);
 		if (isNaN(dob.getTime())) throw new BadRequestException('Invalid dateOfBirth');
 
 		const result = await this.prisma.$transaction(async (tx) => {
+			// Atomic tenant-scoped sequence replaces the previous `count + 1`
+			// pattern, which could collide under parallel registrations.
+			const seq = await nextTenantSequence(tx, tenantId, 'participant');
+			const uniqueId = generateUniqueId('P', seq);
+
 			const participant = await tx.participant.create({
 				data: {
 					tenantId,
@@ -61,55 +68,25 @@ export class ParticipantsService {
 				},
 			});
 
-			let enrolment = null;
-			let waitlistEntry = null;
+			let enrolment: any = null;
+			let waitlistEntry: any = null;
 
 			if (dto.sessionId) {
-				const session = await tx.session.findFirst({
-					where: { id: dto.sessionId, tenantId, deletedAt: null },
-					include: {
-						sessionLocations: { where: { locationId: location.id }, select: { feeOverride: true } },
-					},
+				// Capacity check + enrolment/waitlist creation is delegated to the
+				// allocator to eliminate the previous race condition (parallel
+				// requests could both see `occupied < capacity` and overbook).
+				const allocation = await this.allocator.allocate(tx, {
+					tenantId,
+					participantId: participant.id,
+					sessionId: dto.sessionId,
+					locationId: location.id,
+					paymentPlanType: PaymentPlanType.FULL,
 				});
 
-				if (!session) throw new NotFoundException('Session not found for this location');
-
-				const totalFee = (session.sessionLocations && session.sessionLocations[0] && session.sessionLocations[0].feeOverride) || session.baseFee;
-
-				const occupied = await tx.enrolment.count({
-					where: {
-						tenantId,
-						sessionId: dto.sessionId,
-						locationId: location.id,
-						deletedAt: null,
-						status: { notIn: ['WAITLISTED', 'WITHDRAWN'] },
-					},
-				});
-
-				if (occupied < location.capacity) {
-					enrolment = await tx.enrolment.create({
-						data: {
-							tenantId,
-							participantId: participant.id,
-							sessionId: dto.sessionId,
-							locationId: location.id,
-							paymentPlanType: 'FULL',
-							totalFee: totalFee as any,
-							paidAmount: 0 as any,
-							balance: totalFee as any,
-						},
-					});
+				if (allocation.outcome === 'ENROLLED') {
+					enrolment = allocation.enrolment;
 				} else {
-					const pos = (await tx.waitlist.count({ where: { tenantId, sessionId: dto.sessionId, locationId: location.id, deletedAt: null } })) + 1;
-					waitlistEntry = await tx.waitlist.create({
-						data: {
-							tenantId,
-							participantId: participant.id,
-							sessionId: dto.sessionId,
-							locationId: location.id,
-							position: pos,
-						},
-					});
+					waitlistEntry = allocation.waitlist;
 				}
 			}
 

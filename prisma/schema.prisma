@@ -722,3 +722,23 @@ model StaffNote {
   @@index([tenantId, participantId])
   @@map("staff_notes")
 }
+
+// ─────────────────────────────────────────────
+// CLUB-MANAGER COUNTERS
+// ─────────────────────────────────────────────
+// Owned by THIS repo (cm_ prefix = Club Manager). Backs atomic uniqueId
+// generation (see src/common/utils/tenant-sequence.util.ts). Concurrent
+// allocators serialize on the (tenant_id, counter_key) row via the
+// INSERT ... ON CONFLICT DO UPDATE upsert pattern.
+//
+// Intentionally NOT related to Tenant: that model is governed by the
+// separate tenant-management repo that shares this database, so adding a
+// relation here would force coupling across repos.
+model CmTenantCounter {
+  tenantId   String @map("tenant_id")
+  counterKey String @map("counter_key")
+  nextValue  Int    @default(0) @map("next_value")
+
+  @@id([tenantId, counterKey])
+  @@map("cm_tenant_counters")
+}
