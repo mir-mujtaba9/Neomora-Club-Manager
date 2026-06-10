@@ -4,6 +4,7 @@ import { RegisterParticipantDto } from './dto/register-participant.dto.js';
 import { generateUniqueId } from '../../common/utils/unique-id.util.js';
 import { nextTenantSequence } from '../../common/utils/tenant-sequence.util.js';
 import { EnrolmentAllocatorService } from '../enrolments/enrolment-allocator.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { FindParticipantsDto } from './dto/find-participants.dto.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 import { PaymentPlanType } from '../../common/constants/payment-plan-type.constants.js';
@@ -15,6 +16,7 @@ export class ParticipantsService {
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly allocator: EnrolmentAllocatorService,
+		private readonly notifications: NotificationsService,
 	) {}
 
 	async register(dto: RegisterParticipantDto) {
@@ -32,6 +34,19 @@ export class ParticipantsService {
 
 		const dob = new Date(dto.dateOfBirth);
 		if (isNaN(dob.getTime())) throw new BadRequestException('Invalid dateOfBirth');
+
+		// Look up the session name BEFORE the tx so the post-commit notification
+		// can reference it without an extra round-trip. Unlike the public form,
+		// the staff-facing endpoint does NOT enforce session.status='OPEN' —
+		// staff are trusted to enrol into any non-deleted session.
+		let sessionName: string | null = null;
+		if (dto.sessionId) {
+			const session = await this.prisma.session.findFirst({
+				where: { id: dto.sessionId, tenantId, deletedAt: null },
+				select: { name: true },
+			});
+			sessionName = session?.name ?? null;
+		}
 
 		const result = await this.prisma.$transaction(async (tx) => {
 			// Atomic tenant-scoped sequence replaces the previous `count + 1`
@@ -91,6 +106,37 @@ export class ParticipantsService {
 			}
 
 			return { participant, guardian, enrolment, waitlist: waitlistEntry };
+		}, {
+			// Concurrent registrations into the same (session, location) serialize
+			// on the advisory lock inside the allocator. Default 5s tx timeout
+			// would kill tail-end waiters under N>3 parallelism on Neon.
+			timeout: 60000,
+			maxWait: 60000,
+		});
+
+		// Fire confirmation + staff alerts AFTER commit. Fire-and-forget —
+		// the notifications service handles its own errors and never throws.
+		void this.notifications.enqueueRegistrationOutcome({
+			tenantId,
+			participantId: result.participant.id,
+			enrolmentId: result.enrolment?.id ?? null,
+			outcome: result.enrolment
+				? 'ENROLLED'
+				: result.waitlist
+					? 'WAITLISTED'
+					: 'INQUIRY',
+			waitlistPosition: result.waitlist?.position,
+			participantName: `${result.participant.firstNameEn} ${result.participant.lastNameEn}`,
+			participantLang: result.participant.preferredLang,
+			uniqueId: result.participant.uniqueId,
+			sessionName,
+			locationId: location.id,
+			locationName: location.name,
+			guardian: {
+				fullName: result.guardian.fullName,
+				phone: result.guardian.phone,
+				email: result.guardian.email,
+			},
 		});
 
 		return result;

@@ -127,6 +127,7 @@ enum NotificationType {
   SESSION_START
   WAITLIST_OFFER
   BROADCAST
+  STAFF_ALERT
 }
 
 enum NotificationStatus {
@@ -247,6 +248,7 @@ model User {
   recordedPayments Payment[]    @relation("RecordedBy")
   verifiedPayments Payment[]    @relation("VerifiedBy")
   broadcastMessages BroadcastMessage[]
+  notifications  Notification[] @relation("NotificationRecipientUser")
 
   @@unique([tenantId, email])
   @@index([tenantId, role])
@@ -611,24 +613,36 @@ model BroadcastMessage {
 // ─────────────────────────────────────────────
 
 model Notification {
-  id            String              @id @default(uuid())
-  tenantId      String              @map("tenant_id")
-  participantId String?             @map("participant_id")
-  enrolmentId   String?             @map("enrolment_id")
-  broadcastId   String?             @map("broadcast_id")
-  channel       NotificationChannel
-  type          NotificationType
-  status        NotificationStatus  @default(QUEUED)
-  externalId    String?             @map("external_id")
-  retryCount    Int                 @default(0) @map("retry_count")
-  sentAt        DateTime?           @map("sent_at")
-  createdAt     DateTime            @default(now()) @map("created_at")
+  id              String              @id @default(uuid())
+  tenantId        String              @map("tenant_id")
+  participantId   String?             @map("participant_id")
+  enrolmentId     String?             @map("enrolment_id")
+  broadcastId     String?             @map("broadcast_id")
+  recipientUserId String?             @map("recipient_user_id")
+  recipientPhone  String?             @map("recipient_phone")
+  recipientEmail  String?             @map("recipient_email")
+  channel         NotificationChannel
+  type            NotificationType
+  status          NotificationStatus  @default(QUEUED)
+  bodyText        String?             @map("body_text")
+  dedupeKey       String?             @map("dedupe_key")
+  externalId      String?             @map("external_id")
+  failureReason   String?             @map("failure_reason")
+  retryCount      Int                 @default(0) @map("retry_count")
+  sentAt          DateTime?           @map("sent_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
 
   tenant        Tenant            @relation(fields: [tenantId], references: [id])
   participant   Participant?      @relation(fields: [participantId], references: [id])
   enrolment     Enrolment?        @relation(fields: [enrolmentId], references: [id])
   broadcast     BroadcastMessage? @relation(fields: [broadcastId], references: [id])
+  recipientUser User?             @relation("NotificationRecipientUser", fields: [recipientUserId], references: [id])
 
+  // Two indexes below are defined in the SQL migration (both partial — Prisma
+  // cannot express WHERE clauses on @@unique / @@index), so we omit them
+  // here and rely on migrate deploy (no drift checks):
+  //   * notifications_tenant_dedupe_key — UNIQUE(tenant_id, dedupe_key) WHERE dedupe_key IS NOT NULL
+  //   * notifications_recipient_user_id_idx — INDEX(recipient_user_id) WHERE recipient_user_id IS NOT NULL
   @@index([tenantId, status])
   @@index([participantId])
   @@map("notifications")
@@ -726,7 +740,7 @@ model StaffNote {
 // ─────────────────────────────────────────────
 // CLUB-MANAGER COUNTERS
 // ─────────────────────────────────────────────
-// Owned by THIS repo (cm_ prefix = Club Manager). Backs atomic uniqueId
+// Atomic per-tenant sequence used for participant uniqueId
 // generation (see src/common/utils/tenant-sequence.util.ts). Concurrent
 // allocators serialize on the (tenant_id, counter_key) row via the
 // INSERT ... ON CONFLICT DO UPDATE upsert pattern.

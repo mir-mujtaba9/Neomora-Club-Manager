@@ -97,6 +97,12 @@ export class EnrolmentsService {
         return { status: 'ENROLLED', enrolment: allocation.enrolment };
       }
       return { status: 'WAITLISTED', waitlist: allocation.waitlist };
+    }, {
+      // Concurrent staff-enrolments into the same (session, location) serialize
+      // on the advisory lock inside the allocator. Default 5s tx timeout
+      // would kill tail-end waiters under N>3 parallelism on Neon.
+      timeout: 60000,
+      maxWait: 60000,
     });
 
     return result;
@@ -194,6 +200,12 @@ export class EnrolmentsService {
         return { status: 'ENROLLED', enrolment: allocation.enrolment };
       }
       return { status: 'WAITLISTED', waitlist: allocation.waitlist };
+    }, {
+      // Concurrent re-enrolments into the same (session, location) serialize
+      // on the advisory lock inside the allocator. Default 5s tx timeout
+      // would kill tail-end waiters under N>3 parallelism on Neon.
+      timeout: 60000,
+      maxWait: 60000,
     });
 
     return result;

@@ -1,14 +1,21 @@
-import { Injectable, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../infra/database/prisma.service.js';
 import { CreateLocationDto } from './dto/create-location.dto.js';
 import { UpdateLocationDto } from './dto/update-location.dto.js';
 import { FindLocationsDto } from './dto/find-locations.dto.js';
 import { slugify } from '../../common/utils/slug.util.js';
+import { generateRegistrationQrDataUrl } from '../../common/utils/qr-code.util.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 
 @Injectable()
 export class LocationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(LocationsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async create(tenantId: string, dto: CreateLocationDto) {
     const slug = slugify(dto.name);
@@ -22,13 +29,27 @@ export class LocationsService {
       throw new ConflictException(`Registration slug '${slug}' is already in use by another location`);
     }
 
-    return this.prisma.location.create({
+    const location = await this.prisma.location.create({
       data: {
         ...dto,
         tenantId,
         registrationSlug: slug,
         status: 'active',
       },
+    });
+
+    // Generate a QR code for the registration URL. Best-effort: if it fails
+    // we still return the location row (caller can retry via regenerateQr).
+    const qrCodeUrl = await this.buildQrForSlug(slug).catch((e) => {
+      this.logger.error(`QR generation failed for location ${location.id}: ${e.message}`);
+      return null;
+    });
+
+    if (!qrCodeUrl) return location;
+
+    return this.prisma.location.update({
+      where: { id: location.id },
+      data: { qrCodeUrl },
     });
   }
 
@@ -165,5 +186,39 @@ export class LocationsService {
       tenant: location.tenant,
       sessions,
     };
+  }
+
+  /**
+   * Regenerate the QR code for an existing location. Used to:
+   *  (a) backfill rows created before Plan B,
+   *  (b) refresh after the WEB_BASE_URL or slug changes,
+   *  (c) recover from a failed initial generation.
+   */
+  async regenerateQr(tenantId: string, id: string, user: any) {
+    const location = await this.prisma.location.findUnique({ where: { id } });
+
+    if (!location || location.tenantId !== tenantId || location.deletedAt) {
+      throw new NotFoundException(`Location with ID ${id} not found`);
+    }
+
+    if (user.role === UserRole.LOCATION_MANAGER && user.locationId !== id) {
+      throw new ForbiddenException('You do not have permission to regenerate this QR code');
+    }
+
+    if (!location.registrationSlug) {
+      throw new ConflictException(`Location ${id} has no registration slug`);
+    }
+
+    const qrCodeUrl = await this.buildQrForSlug(location.registrationSlug);
+
+    return this.prisma.location.update({
+      where: { id },
+      data: { qrCodeUrl },
+    });
+  }
+
+  private async buildQrForSlug(slug: string): Promise<string> {
+    const webBaseUrl = this.config.get<string>('app.webBaseUrl') || 'http://localhost:5173';
+    return generateRegistrationQrDataUrl(webBaseUrl, slug);
   }
 }

@@ -7,6 +7,7 @@ import { PrismaService } from '../../infra/database/prisma.service.js';
 import { generateUniqueId } from '../../common/utils/unique-id.util.js';
 import { nextTenantSequence } from '../../common/utils/tenant-sequence.util.js';
 import { EnrolmentAllocatorService } from '../enrolments/enrolment-allocator.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { PaymentPlanType } from '../../common/constants/payment-plan-type.constants.js';
 import { FormRegistrationDto } from './dto/form-registration.dto.js';
  
@@ -15,6 +16,7 @@ export class RegistrationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly allocator: EnrolmentAllocatorService,
+    private readonly notifications: NotificationsService,
   ) {}
  
   // ─── GET /register/:slug ──────────────────────────────────────────────────
@@ -149,7 +151,10 @@ export class RegistrationService {
     // Optional pre-check: for the PUBLIC registration form we only accept
     // sessions that are currently OPEN and within their enrolment window.
     // Doing this before the transaction gives a clean 404 without burning
-    // a tenant sequence number on a doomed registration.
+    // a tenant sequence number on a doomed registration. We also use this
+    // query to grab `name` for the post-commit notification body — saves
+    // one round-trip.
+    let sessionName: string | null = null;
     if (dto.sessionId) {
       const now = new Date();
       const openSession = await this.prisma.session.findFirst({
@@ -168,110 +173,120 @@ export class RegistrationService {
             },
           ],
         },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!openSession) {
         throw new NotFoundException(
           'The selected session is not available at this location',
         );
       }
+      sessionName = openSession.name;
     }
  
-    const result = await this.prisma
-      .$transaction(async (tx) => {
-        // 1. Reserve a tenant-scoped sequence value atomically. Replaces the
-        //    previous `count + 1` pattern which could collide under concurrent
-        //    registrations.
-        const seq = await nextTenantSequence(tx, tenantId, 'participant');
-        const uniqueId = generateUniqueId('P', seq);
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Reserve a tenant-scoped sequence value atomically. Replaces the
+      //    previous `count + 1` pattern which could collide under concurrent
+      //    registrations.
+      const seq = await nextTenantSequence(tx, tenantId, 'participant');
+      const uniqueId = generateUniqueId('P', seq);
  
-        // 2. Create participant
-        const participant = await tx.participant.create({
-          data: {
-            tenantId,
-            locationId: location.id,
-            uniqueId,
-            firstNameEn: dto.firstNameEn,
-            firstNameAr: dto.firstNameAr ?? null,
-            lastNameEn: dto.lastNameEn,
-            lastNameAr: dto.lastNameAr ?? null,
-            dateOfBirth: dob,
-            gender: dto.gender,
-            nationality: dto.nationality ?? null,
-            phone: dto.phone,
-            preferredLang: dto.preferredLang ?? 'en',
-            // Status starts at INQUIRY; advances once docs/fees are handled
-            status: 'INQUIRY',
-          },
-        });
- 
-        // 3. Create guardian
-        const guardian = await tx.guardian.create({
-          data: {
-            tenantId,
-            participantId: participant.id,
-            fullName: dto.guardian.fullName,
-            relationship: dto.guardian.relationship,
-            phone: dto.guardian.phone,
-            email: dto.guardian.email ?? null,
-          },
-        });
- 
-        // 4. Optionally enrol / waitlist — delegated to the single source of
-        //    truth so capacity races and position collisions are impossible.
-        let enrolment: any = null;
-        let waitlistEntry: any = null;
-        let enrolmentStatus: 'ENROLLED' | 'WAITLISTED' | 'NONE' = 'NONE';
- 
-        if (dto.sessionId) {
-          const allocation = await this.allocator.allocate(tx, {
-            tenantId,
-            participantId: participant.id,
-            sessionId: dto.sessionId,
-            locationId: location.id,
-            paymentPlanType: PaymentPlanType.FULL,
-          });
- 
-          if (allocation.outcome === 'ENROLLED') {
-            enrolment = allocation.enrolment;
-            enrolmentStatus = 'ENROLLED';
-          } else {
-            waitlistEntry = allocation.waitlist;
-            enrolmentStatus = 'WAITLISTED';
-          }
-        }
- 
-        return {
-          participant,
-          guardian,
-          enrolment,
-          waitlist: waitlistEntry,
-          enrolmentStatus,
-        };
-      }, {
-        // Per-tx work itself is fast, but concurrent registrations into the
-        // same (session, location) serialize on the advisory lock inside the
-        // allocator. With N parallel waiters + Neon WebSocket latency the
-        // tail-end transactions can sit on the lock past the default 5s
-        // timeout. Measured on Neon: ~3s per serialized tx, so 10 waiters
-        // need ~30s — 60s gives 2× headroom without holding connections
-        // forever on a stuck transaction.
-        timeout: 60000,
-        maxWait: 60000,
-      })
-      .catch((err) => {
-        // Surface the real cause to the server console. Without this, raw-SQL
-        // and Prisma errors that aren't PrismaClientKnownRequestError get
-        // swallowed by Nest's default filter and the client only sees 500.
-        // eslint-disable-next-line no-console
-        console.error('[RegistrationService.submitForm] transaction failed', {
-          slug,
+      // 2. Create participant
+      const participant = await tx.participant.create({
+        data: {
           tenantId,
-          sessionId: dto.sessionId,
-          error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
-        });
-        throw err;
+          locationId: location.id,
+          uniqueId,
+          firstNameEn: dto.firstNameEn,
+          firstNameAr: dto.firstNameAr ?? null,
+          lastNameEn: dto.lastNameEn,
+          lastNameAr: dto.lastNameAr ?? null,
+          dateOfBirth: dob,
+          gender: dto.gender,
+          nationality: dto.nationality ?? null,
+          phone: dto.phone,
+          preferredLang: dto.preferredLang ?? 'en',
+          // Status starts at INQUIRY; advances once docs/fees are handled
+          status: 'INQUIRY',
+        },
       });
+ 
+      // 3. Create guardian
+      const guardian = await tx.guardian.create({
+        data: {
+          tenantId,
+          participantId: participant.id,
+          fullName: dto.guardian.fullName,
+          relationship: dto.guardian.relationship,
+          phone: dto.guardian.phone,
+          email: dto.guardian.email ?? null,
+        },
+      });
+ 
+      // 4. Optionally enrol / waitlist — delegated to the single source of
+      //    truth so capacity races and position collisions are impossible.
+      let enrolment: any = null;
+      let waitlistEntry: any = null;
+      let enrolmentStatus: 'ENROLLED' | 'WAITLISTED' | 'NONE' = 'NONE';
+ 
+      if (dto.sessionId) {
+        const allocation = await this.allocator.allocate(tx, {
+          tenantId,
+          participantId: participant.id,
+          sessionId: dto.sessionId,
+          locationId: location.id,
+          paymentPlanType: PaymentPlanType.FULL,
+        });
+ 
+        if (allocation.outcome === 'ENROLLED') {
+          enrolment = allocation.enrolment;
+          enrolmentStatus = 'ENROLLED';
+        } else {
+          waitlistEntry = allocation.waitlist;
+          enrolmentStatus = 'WAITLISTED';
+        }
+      }
+ 
+      return {
+        participant,
+        guardian,
+        enrolment,
+        waitlist: waitlistEntry,
+        enrolmentStatus,
+      };
+    }, {
+      // Per-tx work itself is fast, but concurrent registrations into the
+      // same (session, location) serialize on the advisory lock inside the
+      // allocator. With N parallel waiters + Neon WebSocket latency the
+      // tail-end transactions can sit on the lock past the default 5s
+      // timeout. 60s gives ample headroom without holding connections forever.
+      timeout: 60000,
+      maxWait: 60000,
+    });
+ 
+    // Fire confirmation + staff alerts AFTER commit. Calling this inside
+    // the transaction would (a) hold the tx open during channel I/O and
+    // (b) leak notifications if the tx rolls back. The service is fire-and-
+    // forget — it never throws back to us, so a notification problem can
+    // never break a registration.
+    void this.notifications.enqueueRegistrationOutcome({
+      tenantId,
+      participantId: result.participant.id,
+      enrolmentId: result.enrolment?.id ?? null,
+      outcome:
+        result.enrolmentStatus === 'NONE' ? 'INQUIRY' : result.enrolmentStatus,
+      waitlistPosition: result.waitlist?.position,
+      participantName: `${result.participant.firstNameEn} ${result.participant.lastNameEn}`,
+      participantLang: result.participant.preferredLang,
+      uniqueId: result.participant.uniqueId,
+      sessionName,
+      locationId: location.id,
+      locationName: location.name,
+      guardian: {
+        fullName: result.guardian.fullName,
+        phone: result.guardian.phone,
+        email: result.guardian.email,
+      },
+    });
  
     return {
       success: true,

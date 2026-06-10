@@ -44,6 +44,16 @@ export class LocationsController {
     return this.locationsService.update(tenantId, id, user, dto);
   }
 
+  @Post(':id/regenerate-qr')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER)
+  async regenerateQr(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.locationsService.regenerateQr(tenantId, id, user);
+  }
+
   @Public()
   @Get(':slug/register')
   async getRegistrationConfig(@Param('slug') slug: string) {
