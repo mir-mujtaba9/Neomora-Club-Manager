@@ -166,6 +166,175 @@ export class NotificationsService {
     }
   }
 
+  // ─── Plan F — fees & payments ────────────────────────────────────────
+
+  /**
+   * Notify the guardian that a new invoice is available, with a
+   * checkout/portal link. Idempotent per (invoiceId, FEE_INVOICE) —
+   * if PaymentLinkService re-issues a link for the same invoice the
+   * dedupe key prevents a duplicate WhatsApp.
+   */
+  async enqueueFeeInvoice(input: {
+    tenantId: string;
+    invoiceId: string;
+    enrolmentId: string;
+    participantId: string;
+    participantName: string;
+    participantLang: string;
+    sessionName: string;
+    invoiceNumber: string;
+    /** Formatted with currency, e.g. "SAR 1,500.00". */
+    amount: string;
+    /** ISO yyyy-mm-dd. */
+    dueDate: string;
+    paymentUrl: string;
+    guardian: { fullName: string; phone: string; email: string | null };
+  }): Promise<void> {
+    try {
+      const lang: SupportedLang =
+        input.participantLang === 'ar' ? 'ar' : 'en';
+      const body = renderTemplate('FEE_INVOICE', lang, {
+        guardianName: input.guardian.fullName,
+        participantName: input.participantName,
+        sessionName: input.sessionName,
+        invoiceNumber: input.invoiceNumber,
+        amount: input.amount,
+        dueDate: input.dueDate,
+        paymentUrl: input.paymentUrl,
+      });
+
+      const channel = input.guardian.phone
+        ? NotificationChannel.WHATSAPP
+        : NotificationChannel.EMAIL;
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.FEE_INVOICE,
+        channel,
+        participantId: input.participantId,
+        enrolmentId: input.enrolmentId,
+        recipientPhone: input.guardian.phone,
+        recipientEmail: input.guardian.email,
+        bodyText: body,
+        dedupeKey: `fee-invoice:${input.invoiceId}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `[enqueueFeeInvoice] failed for invoice=${input.invoiceId}: ${(err as Error)?.message}`,
+        (err as Error)?.stack,
+      );
+    }
+  }
+
+  /**
+   * Send a payment-reminder for an invoice. Caller passes the reminder
+   * "wave" (`waveLabel`) so the dedupe key changes between waves — a
+   * single invoice can get T-7, T-1, T-0 reminders without dedupe blocks.
+   */
+  async enqueuePaymentReminder(input: {
+    tenantId: string;
+    invoiceId: string;
+    enrolmentId: string;
+    participantId: string;
+    participantName: string;
+    participantLang: string;
+    invoiceNumber: string;
+    amount: string;
+    dueDate: string;
+    daysUntilDue: number;
+    paymentUrl: string;
+    waveLabel: string;
+    guardian: { fullName: string; phone: string; email: string | null };
+  }): Promise<void> {
+    try {
+      const lang: SupportedLang =
+        input.participantLang === 'ar' ? 'ar' : 'en';
+      const body = renderTemplate('PAYMENT_REMINDER', lang, {
+        guardianName: input.guardian.fullName,
+        participantName: input.participantName,
+        invoiceNumber: input.invoiceNumber,
+        amount: input.amount,
+        dueDate: input.dueDate,
+        daysUntilDue: input.daysUntilDue,
+        paymentUrl: input.paymentUrl,
+      });
+
+      const channel = input.guardian.phone
+        ? NotificationChannel.WHATSAPP
+        : NotificationChannel.EMAIL;
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.PAYMENT_REMINDER,
+        channel,
+        participantId: input.participantId,
+        enrolmentId: input.enrolmentId,
+        recipientPhone: input.guardian.phone,
+        recipientEmail: input.guardian.email,
+        bodyText: body,
+        dedupeKey: `payment-reminder:${input.invoiceId}:${input.waveLabel}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `[enqueuePaymentReminder] failed for invoice=${input.invoiceId} wave=${input.waveLabel}: ${(err as Error)?.message}`,
+        (err as Error)?.stack,
+      );
+    }
+  }
+
+  /**
+   * Confirmation sent after a payment is verified or webhook-completed.
+   * `receiptUrl` may be empty when the PDF is still generating — the
+   * template gracefully handles the missing link.
+   */
+  async enqueuePaymentConfirm(input: {
+    tenantId: string;
+    paymentId: string;
+    enrolmentId: string;
+    participantId: string;
+    participantName: string;
+    participantLang: string;
+    amount: string;
+    paymentMethod: string;
+    receiptUrl: string;
+    guardian: { fullName: string; phone: string; email: string | null };
+  }): Promise<void> {
+    try {
+      const lang: SupportedLang =
+        input.participantLang === 'ar' ? 'ar' : 'en';
+      const body = renderTemplate('PAYMENT_CONFIRM', lang, {
+        guardianName: input.guardian.fullName,
+        participantName: input.participantName,
+        amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        receiptUrl: input.receiptUrl,
+      });
+
+      const channel = input.guardian.phone
+        ? NotificationChannel.WHATSAPP
+        : NotificationChannel.EMAIL;
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.PAYMENT_CONFIRM,
+        channel,
+        participantId: input.participantId,
+        enrolmentId: input.enrolmentId,
+        recipientPhone: input.guardian.phone,
+        recipientEmail: input.guardian.email,
+        bodyText: body,
+        // Dedupe per payment — the same payment confirmation should
+        // only ever be sent once, no matter how many hooks fire.
+        dedupeKey: `payment-confirm:${input.paymentId}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `[enqueuePaymentConfirm] failed for payment=${input.paymentId}: ${(err as Error)?.message}`,
+        (err as Error)?.stack,
+      );
+    }
+  }
+
   // ─── Admin / ops endpoints (back NotificationsController) ────────────
 
   async findAll(tenantId: string, user: { role: UserRole; locationId?: string | null; id: string }, query: FindNotificationsDto) {

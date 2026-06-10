@@ -169,6 +169,10 @@ model Tenant {
   whatsappToken      String?      @map("whatsapp_token")
   emailFrom          String?      @map("email_from")
   emailReplyTo       String?      @map("email_reply_to")
+  // Plan F — default gateway for new invoices. Factory falls back to
+  // OFFLINE when null. Real gateways throw NotImplementedException
+  // until credentials are provided.
+  defaultPaymentGateway PaymentGateway? @map("default_payment_gateway")
   deletedAt          DateTime?    @map("deleted_at")
   createdAt          DateTime     @default(now()) @map("created_at")
 
@@ -455,6 +459,10 @@ model Enrolment {
   totalFee         Decimal         @map("total_fee") @db.Decimal(10, 2)
   paidAmount       Decimal         @default(0) @map("paid_amount") @db.Decimal(10, 2)
   balance          Decimal         @map("balance") @db.Decimal(10, 2)
+  // Plan F — admin override of the per-participant total. When set,
+  // takes precedence over session.baseFee / sessionLocation.feeOverride.
+  // Audit log records the previous value on change.
+  feeOverride      Decimal?        @map("fee_override") @db.Decimal(10, 2)
   waitlistPosition Int?            @map("waitlist_position")
   enrolledAt       DateTime?       @map("enrolled_at")
   deletedAt        DateTime?       @map("deleted_at")
@@ -516,6 +524,10 @@ model Invoice {
   paymentLink          String?       @map("payment_link")
   paymentLinkExpiresAt DateTime?     @map("payment_link_expires_at")
   reminderSentCount    Int           @default(0) @map("reminder_sent_count")
+  // Plan F — instalment tracking. FULL plans set both to null;
+  // MONTHLY/SEASONAL set instalmentNo = 1..N and instalmentTotal = N.
+  instalmentNo         Int?          @map("instalment_no")
+  instalmentTotal      Int?          @map("instalment_total")
   deletedAt            DateTime?     @map("deleted_at")
   createdAt            DateTime      @default(now()) @map("created_at")
 
@@ -549,6 +561,12 @@ model Payment {
   idempotencyKey String         @unique @map("idempotency_key")
   verifiedAt     DateTime?      @map("verified_at")
   paidAt         DateTime?      @map("paid_at")
+  // Plan F — set after PDF receipt generation (F-18). Pointer into
+  // StorageService (local FS or S3). NULL until verified.
+  receiptKey     String?        @map("receipt_key")
+  // Plan F — reason for FAILED / rejected verification. Surfaced in
+  // finance dashboards but never sent to guardians.
+  failureReason  String?        @map("failure_reason")
   createdAt      DateTime       @default(now()) @map("created_at")
 
   tenant       Tenant     @relation(fields: [tenantId], references: [id])
@@ -771,4 +789,65 @@ model CmTenantCounter {
 
   @@id([tenantId, counterKey])
   @@map("cm_tenant_counters")
+}
+
+// ─────────────────────────────────────────────
+// PLAN F — PAYMENT REMINDER CONFIGS (F-17)
+// ─────────────────────────────────────────────
+//
+// Per-tenant override of the code-level reminder schedule
+// `[7, 1, 0]` days-before-due. When a tenant has zero rows here, the
+// reminder cron uses the defaults; any row(s) replace the defaults
+// for that tenant entirely.
+//
+// `enabled = false` lets staff temporarily silence a reminder slot
+// without deleting the row.
+model CmPaymentReminderConfig {
+  id             String              @id @default(uuid())
+  tenantId       String              @map("tenant_id")
+  daysBeforeDue  Int                 @map("days_before_due")
+  channel        NotificationChannel
+  enabled        Boolean             @default(true)
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  @@unique([tenantId, daysBeforeDue, channel])
+  @@map("cm_payment_reminder_configs")
+}
+
+// ─────────────────────────────────────────────
+// PLAN F — INCOMING PAYMENT-GATEWAY WEBHOOKS (F-14)
+// ─────────────────────────────────────────────
+//
+// Distinct from the existing WebhookEvent model, which queues
+// OUTGOING webhooks we push to tenant systems. This table receives
+// INCOMING POSTs from payment gateways (Moyasar / PayTabs /
+// HyperPay), plus manual OFFLINE entries.
+//
+// Lifecycle:
+//   1. WebhooksController persists the raw payload here with
+//      `processed=false` and `signature_valid=null`.
+//   2. WebhookProcessor cron picks up unprocessed rows, calls
+//      `strategy.verifyWebhookSignature` (sets `signature_valid`),
+//      then `strategy.parseWebhookEvent` to map → Payment update.
+//   3. On success → `processed=true`, `processed_at=NOW()`.
+//   4. On fatal parse failure → `processed=true` + `failure_reason`.
+//
+// Real gateway strategies throw `NotImplementedException` until creds
+// arrive; rows from them are marked failed with reason "gateway not
+// integrated" so finance can manually reconcile.
+model CmPaymentWebhookEvent {
+  id              String         @id @default(uuid())
+  tenantId        String?        @map("tenant_id")
+  gateway         PaymentGateway
+  externalEventId String?        @map("external_event_id")
+  payload         Json
+  headers         Json?
+  signature       String?
+  signatureValid  Boolean?       @map("signature_valid")
+  processed       Boolean        @default(false)
+  processedAt     DateTime?      @map("processed_at")
+  failureReason   String?        @map("failure_reason")
+  receivedAt      DateTime       @default(now()) @map("received_at")
+
+  @@map("cm_payment_webhook_events")
 }

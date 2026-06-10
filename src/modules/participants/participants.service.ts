@@ -262,6 +262,38 @@ export class ParticipantsService {
 			throw new BadRequestException(`Invalid status transition from ${current} to ${next}`);
 		}
 
+		// Plan F-11 — gate manual FEE_PENDING → ACTIVE on outstanding balance.
+		// SUPER_ADMIN and FINANCE_OFFICER can override; everyone else gets the
+		// guard. The auto-promotion service runs on payment.verify so this
+		// branch only fires when staff try to promote manually.
+		if (current === 'FEE_PENDING' && next === 'ACTIVE') {
+			const canOverride =
+				user?.role === UserRole.SUPER_ADMIN ||
+				user?.role === UserRole.FINANCE_OFFICER;
+			if (!canOverride) {
+				const tenant = await this.prisma.tenant.findUnique({
+					where: { id: tenantId },
+					select: { balanceThreshold: true },
+				});
+				const threshold = tenant?.balanceThreshold ?? null;
+				const outstanding = await this.prisma.enrolment.findFirst({
+					where: {
+						tenantId,
+						participantId: participant.id,
+						deletedAt: null,
+						status: { in: ['FEE_PENDING', 'DOCUMENTS_PENDING'] },
+						...(threshold !== null && { balance: { gt: threshold } }),
+					},
+					select: { id: true, balance: true },
+				});
+				if (outstanding) {
+					throw new BadRequestException(
+						`Cannot promote to ACTIVE — enrolment ${outstanding.id} has outstanding balance ${outstanding.balance.toString()} > threshold ${threshold?.toString() ?? '0'}. Record a payment first.`,
+					);
+				}
+			}
+		}
+
 		const updated = await this.prisma.participant.update({ where: { id: participant.id }, data: { status: dto.status as any } });
 
 		if (dto.reason && user && user.id) {

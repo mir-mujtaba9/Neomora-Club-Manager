@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infra/database/prisma.service.js';
 import { EnrolmentAllocatorService } from './enrolment-allocator.service.js';
 import { CreateEnrolmentDto } from './dto/create-enrolment.dto.js';
@@ -13,7 +13,61 @@ export class EnrolmentsService {
     private readonly allocator: EnrolmentAllocatorService,
   ) {}
 
-  async enrol(tenantId: string, user: any, dto: CreateEnrolmentDto) {
+  /**
+   * Plan F-18 — refuse a new enrolment when the participant already has
+   * an *active* enrolment whose session date range overlaps with the
+   * one they're trying to join.
+   *
+   * "Active" = ACTIVE | FEE_PENDING | DOCUMENTS_PENDING. WITHDRAWN /
+   * COMPLETED / CANCELLED are ignored — past sessions don't block new
+   * ones. WAITLISTED is also ignored (they don't have a confirmed seat).
+   *
+   * Set `allowOverlap=true` to skip the check. Callers should gate this
+   * behind a SUPER_ADMIN / FINANCE_OFFICER role check.
+   */
+  async assertNoOverlap(
+    tenantId: string,
+    participantId: string,
+    targetSessionId: string,
+    options: { allowOverlap?: boolean; excludeEnrolmentId?: string } = {},
+  ): Promise<void> {
+    if (options.allowOverlap) return;
+
+    const target = await this.prisma.session.findFirst({
+      where: { id: targetSessionId, tenantId, deletedAt: null },
+      select: { id: true, startDate: true, endDate: true },
+    });
+    if (!target) {
+      // Caller should have already validated the session; if not, surface
+      // a clean 404 so we don't leak this method's existence on bad IDs.
+      throw new NotFoundException('Session not found');
+    }
+
+    const overlap = await this.prisma.enrolment.findFirst({
+      where: {
+        tenantId,
+        participantId,
+        deletedAt: null,
+        ...(options.excludeEnrolmentId && { NOT: { id: options.excludeEnrolmentId } }),
+        status: { in: ['ACTIVE', 'FEE_PENDING', 'DOCUMENTS_PENDING'] },
+        session: {
+          // Two ranges [a1,a2] and [b1,b2] overlap when a1 <= b2 AND a2 >= b1.
+          startDate: { lte: target.endDate },
+          endDate: { gte: target.startDate },
+          deletedAt: null,
+        },
+      },
+      select: { id: true, sessionId: true, status: true },
+    });
+
+    if (overlap) {
+      throw new ConflictException(
+        `Participant already has an active enrolment (${overlap.id}) whose session overlaps. Pass allowOverlap=true to override.`,
+      );
+    }
+  }
+
+  async enrol(tenantId: string, user: any, dto: CreateEnrolmentDto, options: { allowOverlap?: boolean } = {}) {
     const participant = await this.prisma.participant.findFirst({
       where: { id: dto.participantId, tenantId, deletedAt: null },
     });
@@ -81,6 +135,11 @@ export class EnrolmentsService {
       throw new BadRequestException('Participant is already on the waitlist for this session at this location');
     }
 
+    // Plan F-18 — refuse overlapping enrolments unless explicitly bypassed.
+    await this.assertNoOverlap(tenantId, dto.participantId, dto.sessionId, {
+      allowOverlap: options.allowOverlap,
+    });
+
     const result = await this.prisma.$transaction(async (tx) => {
       // Allocator handles capacity check + enrolment/waitlist creation under
       // a transaction-scoped advisory lock keyed by (sessionId, locationId),
@@ -108,7 +167,7 @@ export class EnrolmentsService {
     return result;
   }
 
-  async reEnrol(tenantId: string, user: any, previousEnrolmentId: string, dto: ReEnrolDto) {
+  async reEnrol(tenantId: string, user: any, previousEnrolmentId: string, dto: ReEnrolDto, options: { allowOverlap?: boolean } = {}) {
     const previousEnrolment = await this.prisma.enrolment.findFirst({
       where: { id: previousEnrolmentId, tenantId, deletedAt: null },
     });
@@ -182,6 +241,13 @@ export class EnrolmentsService {
     if (existingWaitlist) {
       throw new BadRequestException('Participant is already on the waitlist for this session at this location');
     }
+
+    // Plan F-18 — refuse overlapping enrolments (excluding the
+    // previous enrolment itself, which is being replaced).
+    await this.assertNoOverlap(tenantId, participantId, dto.sessionId, {
+      allowOverlap: options.allowOverlap,
+      excludeEnrolmentId: previousEnrolmentId,
+    });
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Allocator handles capacity check + enrolment/waitlist creation under

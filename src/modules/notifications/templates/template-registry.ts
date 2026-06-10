@@ -57,6 +57,42 @@ const REGISTRY: {
     ar: (v) =>
       `مرحباً ${v.guardianName}، يتوفر الآن مقعد لـ ${v.participantName} في ${v.sessionName} بفرع ${v.locationName}. يرجى القبول أو الرفض قبل ${v.expiresAt}.\n\nقبول: ${v.acceptUrl}\nرفض: ${v.declineUrl}`,
   },
+  FEE_INVOICE: {
+    en: (v) =>
+      `Hi ${v.guardianName}, invoice ${v.invoiceNumber} for ${v.participantName}'s ${v.sessionName} is now available. Amount: ${v.amount}. Due: ${v.dueDate}.\n\nPay here: ${v.paymentUrl}`,
+    ar: (v) =>
+      `مرحباً ${v.guardianName}، الفاتورة ${v.invoiceNumber} لـ ${v.participantName} في ${v.sessionName} متاحة الآن. المبلغ: ${v.amount}. تاريخ الاستحقاق: ${v.dueDate}.\n\nللدفع: ${v.paymentUrl}`,
+  },
+  PAYMENT_REMINDER: {
+    en: (v) => {
+      const when =
+        v.daysUntilDue > 0
+          ? `due in ${v.daysUntilDue} day${v.daysUntilDue === 1 ? '' : 's'}`
+          : v.daysUntilDue === 0
+            ? 'due today'
+            : `overdue by ${Math.abs(v.daysUntilDue)} day${Math.abs(v.daysUntilDue) === 1 ? '' : 's'}`;
+      return `Hi ${v.guardianName}, reminder: invoice ${v.invoiceNumber} for ${v.participantName} (${v.amount}) is ${when}.\n\nPay here: ${v.paymentUrl}`;
+    },
+    ar: (v) => {
+      const when =
+        v.daysUntilDue > 0
+          ? `مستحقة خلال ${v.daysUntilDue} يوم`
+          : v.daysUntilDue === 0
+            ? 'مستحقة اليوم'
+            : `متأخرة بـ ${Math.abs(v.daysUntilDue)} يوم`;
+      return `مرحباً ${v.guardianName}، تذكير: الفاتورة ${v.invoiceNumber} لـ ${v.participantName} (${v.amount}) ${when}.\n\nللدفع: ${v.paymentUrl}`;
+    },
+  },
+  PAYMENT_CONFIRM: {
+    en: (v) =>
+      v.receiptUrl
+        ? `Hi ${v.guardianName}, we've received your payment of ${v.amount} for ${v.participantName} via ${v.paymentMethod}. Receipt: ${v.receiptUrl}`
+        : `Hi ${v.guardianName}, we've received your payment of ${v.amount} for ${v.participantName} via ${v.paymentMethod}. Your receipt will be available shortly.`,
+    ar: (v) =>
+      v.receiptUrl
+        ? `مرحباً ${v.guardianName}، تم استلام دفعتكم بمبلغ ${v.amount} لـ ${v.participantName} عبر ${v.paymentMethod}. الإيصال: ${v.receiptUrl}`
+        : `مرحباً ${v.guardianName}، تم استلام دفعتكم بمبلغ ${v.amount} لـ ${v.participantName} عبر ${v.paymentMethod}. سيكون الإيصال متاحاً قريباً.`,
+  },
 };
 
 /**

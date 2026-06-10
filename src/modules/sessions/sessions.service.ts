@@ -111,8 +111,15 @@ export class SessionsService {
 			this.prisma.session.count({ where }),
 		]);
 
+		// Plan F-10 — surface durationDays so the UI doesn't have to recompute it.
+		// Inclusive count: a session from Jun 1 to Jun 3 is 3 days.
+		const itemsWithDuration = items.map((s) => ({
+			...s,
+			durationDays: computeDurationDays(s.startDate, s.endDate),
+		}));
+
 		return {
-			items,
+			items: itemsWithDuration,
 			meta: {
 				total,
 				page,
@@ -187,4 +194,13 @@ export class SessionsService {
 
 		return created;
 	}
+}
+
+/**
+ * Plan F-10 — inclusive day count between two dates.
+ * Jun 1 → Jun 3 = 3 days. Same-day = 1 day.
+ */
+function computeDurationDays(start: Date, end: Date): number {
+	const ms = end.getTime() - start.getTime();
+	return Math.max(1, Math.floor(ms / 86_400_000) + 1);
 }

@@ -16,4 +16,12 @@ export default registerAs('app', () => ({
   // to auto-expire and seats to auto-promote.
   waitlistProcessorEnabled:
     (process.env.WAITLIST_PROCESSOR_ENABLED || 'false').toLowerCase() === 'true',
+  // Plan F — controls payment-reminder + webhook + session-auto-status crons.
+  // Off by default for same reason as waitlistProcessorEnabled.
+  paymentReminderEnabled:
+    (process.env.PAYMENT_REMINDER_ENABLED || 'false').toLowerCase() === 'true',
+  paymentWebhookProcessorEnabled:
+    (process.env.PAYMENT_WEBHOOK_PROCESSOR_ENABLED || 'false').toLowerCase() === 'true',
+  sessionAutoStatusEnabled:
+    (process.env.SESSION_AUTO_STATUS_ENABLED || 'false').toLowerCase() === 'true',
 }));

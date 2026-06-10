@@ -12,7 +12,10 @@ export type TemplateKey =
   | 'REGISTRATION_WAITLISTED'
   | 'REGISTRATION_INQUIRY'
   | 'STAFF_ALERT_NEW_INQUIRY'
-  | 'WAITLIST_OFFER';
+  | 'WAITLIST_OFFER'
+  | 'FEE_INVOICE'
+  | 'PAYMENT_REMINDER'
+  | 'PAYMENT_CONFIRM';
 
 /**
  * Shape of variables expected by each template. Renderers receive this
@@ -58,6 +61,50 @@ export interface TemplateVarsByKey {
     expiresAt: string;
     acceptUrl: string;
     declineUrl: string;
+  };
+  /**
+   * Sent when a new invoice is generated (or re-issued). Contains a
+   * checkout / portal link for the parent to pay.
+   */
+  FEE_INVOICE: {
+    guardianName: string;
+    participantName: string;
+    sessionName: string;
+    invoiceNumber: string;
+    /** Formatted with currency, e.g. "SAR 1,500.00". */
+    amount: string;
+    /** ISO yyyy-mm-dd. */
+    dueDate: string;
+    /** Gateway checkout URL or portal-pay URL. */
+    paymentUrl: string;
+  };
+  /**
+   * Reminder sent N days before an invoice's due date (or after when
+   * overdue). `daysUntilDue` is negative for overdue invoices.
+   */
+  PAYMENT_REMINDER: {
+    guardianName: string;
+    participantName: string;
+    invoiceNumber: string;
+    amount: string;
+    dueDate: string;
+    /** Positive = upcoming. Zero = today. Negative = overdue. */
+    daysUntilDue: number;
+    paymentUrl: string;
+  };
+  /**
+   * Confirmation sent after a payment is verified (offline) or
+   * gateway-completed. Includes the receipt URL when the PDF has
+   * already been generated; falls back to an empty string when the
+   * receipt is queued but not yet ready.
+   */
+  PAYMENT_CONFIRM: {
+    guardianName: string;
+    participantName: string;
+    amount: string;
+    paymentMethod: string;
+    /** Empty string when receipt is pending. */
+    receiptUrl: string;
   };
 }
 

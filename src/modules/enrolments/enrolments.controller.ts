@@ -30,8 +30,15 @@ export class EnrolmentsController {
     @TenantId() tenantId: string,
     @CurrentUser() user: any,
     @Body() dto: CreateEnrolmentDto,
+    @Query('allowOverlap') allowOverlap?: string,
   ) {
-    return this.enrolmentsService.enrol(tenantId, user, dto);
+    // Only SUPER_ADMIN and FINANCE_OFFICER may bypass the overlap guard.
+    const wantsBypass = allowOverlap === 'true';
+    const canBypass =
+      user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.FINANCE_OFFICER;
+    return this.enrolmentsService.enrol(tenantId, user, dto, {
+      allowOverlap: wantsBypass && canBypass,
+    });
   }
 
   @Post(':id/re-enrol')
@@ -41,7 +48,13 @@ export class EnrolmentsController {
     @CurrentUser() user: any,
     @Param('id') id: string,
     @Body() dto: ReEnrolDto,
+    @Query('allowOverlap') allowOverlap?: string,
   ) {
-    return this.enrolmentsService.reEnrol(tenantId, user, id, dto);
+    const wantsBypass = allowOverlap === 'true';
+    const canBypass =
+      user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.FINANCE_OFFICER;
+    return this.enrolmentsService.reEnrol(tenantId, user, id, dto, {
+      allowOverlap: wantsBypass && canBypass,
+    });
   }
 }
