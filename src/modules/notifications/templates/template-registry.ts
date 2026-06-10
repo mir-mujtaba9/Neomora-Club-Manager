@@ -51,6 +51,12 @@ const REGISTRY: {
     ar: (v) =>
       `تسجيل جديد (${v.outcome}): ${v.participantName} (الرقم: ${v.uniqueId}) في فرع ${v.locationName}. ولي الأمر: ${v.guardianName} (${v.guardianPhone}).`,
   },
+  WAITLIST_OFFER: {
+    en: (v) =>
+      `Hi ${v.guardianName}, a seat is now available for ${v.participantName} in ${v.sessionName} at ${v.locationName}. Please accept or decline before ${v.expiresAt}.\n\nAccept: ${v.acceptUrl}\nDecline: ${v.declineUrl}`,
+    ar: (v) =>
+      `مرحباً ${v.guardianName}، يتوفر الآن مقعد لـ ${v.participantName} في ${v.sessionName} بفرع ${v.locationName}. يرجى القبول أو الرفض قبل ${v.expiresAt}.\n\nقبول: ${v.acceptUrl}\nرفض: ${v.declineUrl}`,
+  },
 };
 
 /**

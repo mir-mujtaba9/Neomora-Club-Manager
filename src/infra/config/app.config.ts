@@ -10,4 +10,10 @@ export default registerAs('app', () => ({
   // Public URL of the guardian-facing web app. Used to build QR-code targets
   // (e.g. `${webBaseUrl}/register/${slug}`). Override per environment.
   webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:5173',
+  // Plan D — controls the waitlist promotion/expiry cron. Off by default
+  // so smoke tests and `npm run start` don't surprise-trigger side effects.
+  // Set to `true` in dev/staging/prod environments where you want offers
+  // to auto-expire and seats to auto-promote.
+  waitlistProcessorEnabled:
+    (process.env.WAITLIST_PROCESSOR_ENABLED || 'false').toLowerCase() === 'true',
 }));

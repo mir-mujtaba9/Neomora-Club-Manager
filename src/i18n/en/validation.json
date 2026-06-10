@@ -1,0 +1,9 @@
+{
+  "IS_ENUM": "{property} must be one of the following values: {constraints.1}",
+  "IS_NOT_EMPTY": "{property} should not be empty",
+  "IS_STRING": "{property} must be a string",
+  "IS_EMAIL": "{property} must be a valid email address",
+  "IS_UUID": "{property} must be a valid UUID",
+  "IS_ISO_8601": "{property} must be a valid ISO-8601 date string",
+  "IS_ARABIC_TEXT": "{property} must contain only Arabic letters"
+}

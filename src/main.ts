@@ -1,7 +1,8 @@
 import 'dotenv/config';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -22,9 +23,12 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors();
 
-  // Global validation pipe
+  // Global validation pipe — Plan E. I18nValidationPipe extends the
+  // standard ValidationPipe and wires nestjs-i18n's exception factory so
+  // validator messages produced via `i18nValidationMessage` are translated
+  // per request language.
   app.useGlobalPipes(
-    new ValidationPipe({
+    new I18nValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
@@ -35,7 +39,8 @@ async function bootstrap() {
   // Order matters in Nest: filters listed later run FIRST. We want the most
   // specific filters to attempt the catch first, falling back to the
   // catch-all. So: catch-all is listed first (runs last), then Prisma, then
-  // generic HttpException.
+  // generic HttpException, then the i18n validation filter (most specific,
+  // runs first — it only catches I18nValidationException).
   // The catch-all logs the full stack to the server console and (in non-prod)
   // includes the error name/message in the response body so failing smoke
   // tests don't need server-log scraping.
@@ -43,6 +48,9 @@ async function bootstrap() {
     new AllExceptionsFilter(),
     new PrismaExceptionFilter(),
     new HttpExceptionFilter(),
+    new I18nValidationExceptionFilter({
+      detailedErrors: false,
+    }),
   );
 
   // Swagger documentation

@@ -1,0 +1,9 @@
+{
+  "IS_ENUM": "يجب أن تكون قيمة {property} إحدى القيم التالية: {constraints.1}",
+  "IS_NOT_EMPTY": "حقل {property} مطلوب ولا يمكن تركه فارغاً",
+  "IS_STRING": "يجب أن تكون قيمة {property} نصاً",
+  "IS_EMAIL": "يجب أن يكون {property} بريداً إلكترونياً صحيحاً",
+  "IS_UUID": "يجب أن تكون قيمة {property} معرفاً فريداً (UUID) صحيحاً",
+  "IS_ISO_8601": "يجب أن يكون {property} تاريخاً صحيحاً بصيغة ISO-8601",
+  "IS_ARABIC_TEXT": "يجب أن يحتوي حقل {property} على حروف عربية فقط"
+}

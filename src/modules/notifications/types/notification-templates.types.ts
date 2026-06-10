@@ -11,7 +11,8 @@ export type TemplateKey =
   | 'REGISTRATION_ENROLLED'
   | 'REGISTRATION_WAITLISTED'
   | 'REGISTRATION_INQUIRY'
-  | 'STAFF_ALERT_NEW_INQUIRY';
+  | 'STAFF_ALERT_NEW_INQUIRY'
+  | 'WAITLIST_OFFER';
 
 /**
  * Shape of variables expected by each template. Renderers receive this
@@ -47,6 +48,16 @@ export interface TemplateVarsByKey {
     guardianName: string;
     guardianPhone: string;
     outcome: 'ENROLLED' | 'WAITLISTED' | 'INQUIRY';
+  };
+  WAITLIST_OFFER: {
+    guardianName: string;
+    participantName: string;
+    sessionName: string;
+    locationName: string;
+    /** ISO-formatted local-time string suitable for direct inclusion in the body. */
+    expiresAt: string;
+    acceptUrl: string;
+    declineUrl: string;
   };
 }
 

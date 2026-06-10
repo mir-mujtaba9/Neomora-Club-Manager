@@ -113,6 +113,14 @@ enum WaitlistOfferStatus {
   DECLINED
 }
 
+// Plan E — replaces the freeform `gender String` column. Migration
+// `20260612090000_gender_enum` performs the cast with a CASE WHEN that
+// aborts loudly on unmappable legacy data.
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum NotificationChannel {
   WHATSAPP
   EMAIL
@@ -381,7 +389,7 @@ model Participant {
   lastNameEn    String            @map("last_name_en")
   lastNameAr    String?           @map("last_name_ar")
   dateOfBirth   DateTime          @map("date_of_birth") @db.Date
-  gender        String
+  gender        Gender
   nationality   String?
   status        ParticipantStatus @default(INQUIRY)
   phone         String
@@ -568,8 +576,16 @@ model Waitlist {
   offerSentAt    DateTime?           @map("offer_sent_at")
   offerExpiresAt DateTime?           @map("offer_expires_at")
   offerStatus    WaitlistOfferStatus @default(PENDING) @map("offer_status")
-  deletedAt      DateTime?           @map("deleted_at")
-  createdAt      DateTime            @default(now()) @map("created_at")
+  // Plan D — accept/decline links. `offerToken` is set when an offer is
+  // sent and cleared (or stale via offerTokenExpiresAt) once the guardian
+  // responds. Partial UNIQUE index lives in SQL-only (Prisma can't express
+  // WHERE clauses on @@unique); see migration
+  // `20260611090000_waitlist_offer_tokens`.
+  offerToken           String?       @map("offer_token")
+  offerTokenExpiresAt  DateTime?     @map("offer_token_expires_at")
+  offerAttempts        Int           @default(0) @map("offer_attempts")
+  deletedAt            DateTime?     @map("deleted_at")
+  createdAt            DateTime      @default(now()) @map("created_at")
 
   tenant        Tenant      @relation(fields: [tenantId], references: [id])
   participant   Participant @relation(fields: [participantId], references: [id])

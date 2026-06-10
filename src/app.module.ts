@@ -1,5 +1,13 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { join } from 'path';
+import {
+  AcceptLanguageResolver,
+  HeaderResolver,
+  I18nModule,
+  QueryResolver,
+} from 'nestjs-i18n';
 import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
 import { PrismaModule } from './infra/database/prisma.module';
 import { RedisModule } from './infra/cache/redis.module';
@@ -33,6 +41,26 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
         jwtConfig,
         storageConfig,
         queueConfig,
+      ],
+    }),
+    // Plan D — enables `@Cron` decorators (waitlist promote/expire).
+    // Individual processors are still gated by their own enabled flag.
+    ScheduleModule.forRoot(),
+    // Plan E — i18n for bilingual (en/ar) validation messages. Language
+    // is resolved per request from (in order) the `?lang=` query string,
+    // an `x-lang` header, then the standard `Accept-Language` header.
+    // JSON files live in src/i18n/{en,ar}/ and are copied to dist/ at
+    // build time via nest-cli.json's assets config.
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: join(__dirname, '/i18n/'),
+        watch: true,
+      },
+      resolvers: [
+        { use: QueryResolver, options: ['lang'] },
+        new HeaderResolver(['x-lang']),
+        AcceptLanguageResolver,
       ],
     }),
     PrismaModule,

@@ -42,6 +42,31 @@ export interface RegistrationOutcomeInput {
   };
 }
 
+/**
+ * Input for `enqueueWaitlistOffer`. Built by WaitlistService.sendOffer
+ * after it has rotated the offer token and committed the row update.
+ */
+export interface WaitlistOfferInput {
+  tenantId: string;
+  waitlistId: string;
+  participantId: string;
+  participantName: string;
+  participantLang: string;
+  sessionName: string;
+  locationName: string;
+  /** Absolute deadline by which the guardian must accept/decline. */
+  expiresAt: Date;
+  /** Short-lived token uniquely identifying this offer round. */
+  offerToken: string;
+  acceptUrl: string;
+  declineUrl: string;
+  guardian: {
+    fullName: string;
+    phone: string;
+    email: string | null;
+  };
+}
+
 interface CreateNotificationRow {
   tenantId: string;
   type: NotificationType;
@@ -88,6 +113,54 @@ export class NotificationsService {
       // template var mismatch) that escape the per-row try/catch.
       this.logger.error(
         `[enqueueRegistrationOutcome] unexpected error for participant=${input.participantId}: ${(err as Error)?.message}`,
+        (err as Error)?.stack,
+      );
+    }
+  }
+
+  /**
+   * Plan D — send a "seat available, please accept/decline" message to
+   * the guardian of a waitlisted participant. Fire-and-forget; caller
+   * (WaitlistService.sendOffer) does not await the outcome.
+   *
+   * Idempotency: keyed on (waitlistId, offerToken). A given offerToken
+   * is generated exactly once per offer round, so re-sending the same
+   * notification — e.g., because the cron raced with a manual send — is
+   * a no-op via the partial unique index on `dedupe_key`.
+   */
+  async enqueueWaitlistOffer(input: WaitlistOfferInput): Promise<void> {
+    try {
+      const lang: SupportedLang =
+        input.participantLang === 'ar' ? 'ar' : 'en';
+
+      const body = renderTemplate('WAITLIST_OFFER', lang, {
+        guardianName: input.guardian.fullName,
+        participantName: input.participantName,
+        sessionName: input.sessionName,
+        locationName: input.locationName,
+        expiresAt: input.expiresAt.toISOString(),
+        acceptUrl: input.acceptUrl,
+        declineUrl: input.declineUrl,
+      });
+
+      const channel = input.guardian.phone
+        ? NotificationChannel.WHATSAPP
+        : NotificationChannel.EMAIL;
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.WAITLIST_OFFER,
+        channel,
+        participantId: input.participantId,
+        recipientPhone: input.guardian.phone,
+        recipientEmail: input.guardian.email,
+        bodyText: body,
+        // Dedupe per offer round — same token = same logical offer.
+        dedupeKey: `waitlist-offer:${input.waitlistId}:${input.offerToken}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `[enqueueWaitlistOffer] unexpected error for waitlist=${input.waitlistId}: ${(err as Error)?.message}`,
         (err as Error)?.stack,
       );
     }
