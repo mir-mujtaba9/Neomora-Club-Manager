@@ -53,12 +53,35 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger documentation
+  // Swagger documentation (Plan K F-37).
+  //   - Bearer scheme (`access-token`) for staff JWT auth.
+  //   - API-key scheme (`api-key`) for partner machine-to-machine auth.
+  //   The class-validator CLI plugin in nest-cli.json auto-extracts DTO
+  //   schemas; controllers add `@ApiTags / @ApiOperation / @ApiResponse`
+  //   for human-readable grouping and descriptions.
   const config = new DocumentBuilder()
-    .setTitle('Club Manager API')
-    .setDescription('The Neomora Club Manager API description')
+    .setTitle('Neomora Club Manager API')
+    .setDescription(
+      'Multi-tenant club management platform. ' +
+        'Staff endpoints use Bearer JWT; partner / integration endpoints accept ' +
+        'either a Bearer JWT OR an `x-api-key` header (issued via POST /api-keys).',
+    )
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'access-token',
+    )
+    .addApiKey(
+      { type: 'apiKey', name: 'x-api-key', in: 'header' },
+      'api-key',
+    )
+    .addTag('Auth', 'Staff login, refresh, 2FA, password reset')
+    .addTag('API Keys', 'Issue and revoke partner API keys (SUPER_ADMIN)')
+    .addTag('Participants', 'Participant CRUD + status — F-35 partner read access')
+    .addTag('Sessions', 'Sessions / programmes — F-35 partner read access')
+    .addTag('Payments', 'Payment lifecycle — F-35 partner read access')
+    .addTag('Locations', 'Locations — F-35 partner read access')
+    .addTag('Audit', 'Tamper-evident audit chain verification')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);

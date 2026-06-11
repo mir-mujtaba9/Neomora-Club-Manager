@@ -1,8 +1,10 @@
 import { Body, Controller, Post, UseGuards, Get, Query, Patch, Param } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { JwtOrApiKeyGuard } from '../../common/guards/jwt-or-api-key.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { ApiScopes } from '../../common/decorators/api-scope.decorator.js';
 import { TenantId } from '../../common/decorators/tenant.decorator.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 
@@ -13,8 +15,9 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { UpdateSessionStatusDto } from './dto/update-session-status.dto.js';
 import { CreatePaymentPlanDto } from './dto/create-payment-plan.dto.js';
 
+@ApiTags('Sessions')
 @Controller('sessions')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtOrApiKeyGuard, RolesGuard)
 export class SessionsController {
 	constructor(private readonly sessionsService: SessionsService) {}
 
@@ -25,6 +28,16 @@ export class SessionsController {
 	}
 
 	@Get()
+	@ApiScopes('sessions:read')
+	@ApiBearerAuth('access-token')
+	@ApiSecurity('api-key')
+	@ApiOperation({
+		summary: 'List sessions',
+		description:
+			'Paginated list with optional `status`, `locationId`, `dateFrom`, `dateTo` filters. ' +
+			'Each item includes `durationDays` (inclusive of start and end day).',
+	})
+	@ApiResponse({ status: 200, description: 'Paginated sessions.' })
 	async findAll(
 		@TenantId() tenantId: string,
 		@CurrentUser() user: any,

@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -10,6 +10,7 @@ import {
   QueryResolver,
 } from 'nestjs-i18n';
 import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
+import { IPRateLimitMiddleware } from './common/middleware/ip-rate-limit.middleware.js';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor.js';
 import { PrismaModule } from './infra/database/prisma.module';
 import { RedisModule } from './infra/cache/redis.module';
@@ -20,6 +21,7 @@ import jwtConfig from './infra/config/jwt.config';
 import storageConfig from './infra/config/storage.config';
 import queueConfig from './infra/config/queue.config';
 import { AuditModule } from './modules/audit/audit.module.js';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module.js';
 import { AuthModule } from './modules/auth/auth.module';
 import { GuardianAuthModule } from './modules/auth/guardian-auth.module.js';
 import { LocationsModule } from './modules/locations/locations.module.js';
@@ -89,6 +91,10 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
     NotificationsModule,
     FeesModule,
     PaymentsModule,
+    // Plan K (F-34) — partner API key management. JWT-only controller,
+    // SUPER_ADMIN role required. The matching `JwtOrApiKeyGuard` lives
+    // in common/ so partner controllers can use it without importing.
+    ApiKeysModule,
   ],
   providers: [
     // Plan J (F-32) — global audit interceptor. Writes one tamper-evident
@@ -104,5 +110,26 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(TenantContextMiddleware).forRoutes('*');
+
+    // Plan K (F-34) — IP-based rate limiting on auth + public registration
+    // routes. Sliding window of 20 requests / 60 seconds per IP. When
+    // Redis is disabled the middleware is a no-op (dev convenience).
+    // The default Nest middleware path resolver respects the global
+    // prefix + versioning, so `auth/login` matches `/api/v1/auth/login`.
+    consumer
+      .apply(IPRateLimitMiddleware)
+      .forRoutes(
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'auth/refresh', method: RequestMethod.POST },
+        { path: 'auth/forgot-password', method: RequestMethod.POST },
+        { path: 'auth/reset-password', method: RequestMethod.POST },
+        { path: 'auth/2fa/setup', method: RequestMethod.POST },
+        { path: 'auth/2fa/enable', method: RequestMethod.POST },
+        { path: 'auth/2fa/disable', method: RequestMethod.POST },
+        { path: 'guardian-auth/request-link', method: RequestMethod.POST },
+        { path: 'guardian-auth/verify', method: RequestMethod.POST },
+        { path: 'participants/register', method: RequestMethod.POST },
+        { path: 'register/*', method: RequestMethod.POST },
+      );
   }
 }

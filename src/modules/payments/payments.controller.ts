@@ -15,12 +15,14 @@ import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { JwtOrApiKeyGuard } from '../../common/guards/jwt-or-api-key.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { ApiScopes } from '../../common/decorators/api-scope.decorator.js';
 import { TenantId } from '../../common/decorators/tenant.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 import { PaymentsService } from './payments.service.js';
 import { RecordOfflinePaymentDto } from './dto/record-offline-payment.dto.js';
@@ -41,8 +43,9 @@ function sanitizeFilename(name: string) {
  *   GET   /payments               → list (filtered by role)
  *   GET   /payments/:id           → single
  */
+@ApiTags('Payments')
 @Controller('payments')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtOrApiKeyGuard, RolesGuard)
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
@@ -143,6 +146,16 @@ export class PaymentsController {
   // ─── reads ────────────────────────────────────────────────────────
 
   @Get()
+  @ApiScopes('payments:read')
+  @ApiBearerAuth('access-token')
+  @ApiSecurity('api-key')
+  @ApiOperation({
+    summary: 'List payments',
+    description:
+      'Paginated list with optional `status`, `gateway`, `enrolmentId`, `dateFrom`, `dateTo` filters. ' +
+      'LOCATION_MANAGER is auto-scoped to their location.',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated payments.' })
   async findAll(
     @TenantId() tenantId: string,
     @CurrentUser() user: { role: UserRole; locationId?: string | null },
@@ -152,6 +165,12 @@ export class PaymentsController {
   }
 
   @Get(':id')
+  @ApiScopes('payments:read')
+  @ApiBearerAuth('access-token')
+  @ApiSecurity('api-key')
+  @ApiOperation({ summary: 'Get payment by id' })
+  @ApiResponse({ status: 200, description: 'Payment detail with linked enrolment + invoice.' })
+  @ApiResponse({ status: 404, description: 'Payment not found in this tenant.' })
   async findOne(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.paymentsService.findOne(tenantId, id);
   }

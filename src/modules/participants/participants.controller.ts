@@ -1,10 +1,12 @@
 import { Body, Controller, Post, UseGuards, Get, Query, Param, Res, Patch, Delete, NotFoundException } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { TenantId } from '../../common/decorators/tenant.decorator.js';
 import { ParticipantsService } from './participants.service.js';
 import { RegisterParticipantDto } from './dto/register-participant.dto.js';
 import { Public } from '../../common/decorators/roles.decorator.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { JwtOrApiKeyGuard } from '../../common/guards/jwt-or-api-key.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { ApiScopes } from '../../common/decorators/api-scope.decorator.js';
 import { FindParticipantsDto } from './dto/find-participants.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Response } from 'express';
@@ -16,8 +18,9 @@ import { PrismaService } from '../../infra/database/prisma.service.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 
+@ApiTags('Participants')
 @Controller('participants')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtOrApiKeyGuard, RolesGuard)
 export class ParticipantsController {
 	constructor(
 		private readonly participantsService: ParticipantsService,
@@ -36,6 +39,18 @@ export class ParticipantsController {
 
 	@Get()
 	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+	@ApiScopes('participants:read')
+	@ApiBearerAuth('access-token')
+	@ApiSecurity('api-key')
+	@ApiOperation({
+		summary: 'List participants',
+		description:
+			'Paginated list. Filters: `status`, `locationId`, `sessionId`, `paymentPlanType`, `dateFrom`, `dateTo`, `search` (uniqueId / phone / name). ' +
+			'`?export=csv` returns a CSV download. LOCATION_MANAGER is auto-scoped to their own location.',
+	})
+	@ApiResponse({ status: 200, description: 'Paginated participants or CSV download.' })
+	@ApiResponse({ status: 401, description: 'Missing or invalid JWT / API key.' })
+	@ApiResponse({ status: 403, description: 'Role / scope not permitted.' })
 	async findAll(
 		@TenantId() tenantId: string,
 		@CurrentUser() user: any,
@@ -71,6 +86,17 @@ export class ParticipantsController {
 
 	@Get(':id')
 	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+	@ApiScopes('participants:read')
+	@ApiBearerAuth('access-token')
+	@ApiSecurity('api-key')
+	@ApiOperation({
+		summary: 'Get participant by id (360° profile)',
+		description:
+			'Returns participant + guardians + enrolments (with `paymentSummary`) + documents + staff notes. ' +
+			'Sessions ordered most recent first; staff notes newest first with `author`.',
+	})
+	@ApiResponse({ status: 200, description: 'Participant profile.' })
+	@ApiResponse({ status: 404, description: 'Participant not found in this tenant.' })
 	async findById(
 		@TenantId() tenantId: string,
 		@CurrentUser() user: any,
