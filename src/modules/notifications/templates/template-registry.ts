@@ -99,6 +99,12 @@ const REGISTRY: {
     ar: (v) =>
       `مرحباً ${v.guardianName}، إليك رابط بوابة ولي الأمر الآمن (صالح لمدة ${v.expiresIn}):\n${v.magicLinkUrl}\n\nإذا لم تطلب هذا، فضلاً تجاهل هذه الرسالة.`,
   },
+  PASSWORD_RESET: {
+    en: (v) =>
+      `Hi ${v.userName}, we received a request to reset your Club Manager password. The link below is valid for ${v.expiresIn}:\n${v.resetUrl}\n\nIf you did not request this, you can safely ignore this email.`,
+    ar: (v) =>
+      `مرحباً ${v.userName}، وصلنا طلب لإعادة تعيين كلمة المرور. الرابط أدناه صالح لمدة ${v.expiresIn}:\n${v.resetUrl}\n\nإذا لم تطلب ذلك، يمكنك تجاهل هذا البريد بأمان.`,
+  },
 };
 
 /**

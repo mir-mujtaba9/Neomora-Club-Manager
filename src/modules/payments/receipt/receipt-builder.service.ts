@@ -4,10 +4,15 @@ import * as path from 'path';
 import { PrismaService } from '../../../infra/database/prisma.service.js';
 import { StorageService } from '../../storage/storage.service.js';
 
-// pdfmake's Node entry-point is CJS — bring it in via require so we
-// don't get an ESM interop surprise at runtime.
+// pdfmake 0.3.x moved the PdfPrinter constructor out of the package
+// root: `require('pdfmake')` now returns a small config object
+// ({virtualfs, urlAccessPolicy, localAccessPolicy}), NOT the class.
+// The constructor now lives at `pdfmake/js/Printer` and is exposed as
+// the `default` export of that compiled CJS module. Older docs/snippets
+// that show `require('pdfmake')` predate this restructure and will
+// throw "PdfPrinter is not a constructor" at startup.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const PdfPrinter = (require as any)('pdfmake');
+const PdfPrinter = (require as any)('pdfmake/js/Printer').default;
 
 /**
  * Plan F — generates a PDF receipt for a verified payment.

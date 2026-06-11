@@ -137,6 +137,7 @@ enum NotificationType {
   BROADCAST
   STAFF_ALERT
   GUARDIAN_MAGIC_LINK
+  PASSWORD_RESET
 }
 
 enum NotificationStatus {
@@ -262,6 +263,8 @@ model User {
   verifiedPayments Payment[]    @relation("VerifiedBy")
   broadcastMessages BroadcastMessage[]
   notifications  Notification[] @relation("NotificationRecipientUser")
+  // Plan J (F-33) — password reset audit trail.
+  passwordResetTokens PasswordResetToken[]
 
   @@unique([tenantId, email])
   @@index([tenantId, role])
@@ -288,6 +291,33 @@ model RefreshToken {
   @@index([userId])
   @@index([jti])
   @@map("refresh_tokens")
+}
+
+// ───────────────────────────────────────
+// PASSWORD RESET TOKENS (Plan J / F-33)
+// ───────────────────────────────────────
+// One row per password-reset request. Tokens are short-lived (default
+// 1h), single-use (`usedAt` set on consumption), and stored as a
+// SHA-256 hash — the plaintext token only exists in the email body.
+// Multiple outstanding tokens per user are allowed; the most recent
+// supersedes earlier ones implicitly (older ones simply expire).
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tenantId  String    @map("tenant_id")
+  tokenHash String    @unique @map("token_hash")
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 // ─────────────────────────────────────────────
@@ -741,6 +771,15 @@ model AuditLog {
   beforeState Json?   @map("before_state")
   afterState  Json?   @map("after_state")
   ipAddress  String?  @map("ip_address")
+  // Plan J (F-32) — tamper-evident hash chain. `hashSelf` is SHA-256 of
+  // a canonical JSON of (tenantId, userId, action, resource, resourceId,
+  // beforeState, afterState, ipAddress, createdAt, hashPrev). `hashPrev`
+  // links to the previous row's hashSelf within the same tenant. The chain
+  // is verifiable via `AuditChainService.verify(tenantId)`. Nullable so
+  // legacy rows can co-exist without backfill; chain verification begins
+  // at the first row whose hashSelf is set.
+  hashSelf   String?  @map("hash_self")
+  hashPrev   String?  @map("hash_prev")
   createdAt  DateTime @default(now()) @map("created_at")
 
   tenant     Tenant   @relation(fields: [tenantId], references: [id])

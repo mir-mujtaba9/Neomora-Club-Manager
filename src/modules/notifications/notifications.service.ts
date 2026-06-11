@@ -381,6 +381,48 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Plan J (F-33) — staff/admin password reset email. Always uses the
+   * EMAIL channel (passwords belong to staff users, not parents). The
+   * dedupe key includes the token so two clicks on "forgot password"
+   * within the same minute don't produce duplicate sends.
+   */
+  async enqueuePasswordReset(input: {
+    tenantId: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    userLang?: string;
+    resetUrl: string;
+    expiresIn: string;
+    token: string;
+  }): Promise<void> {
+    try {
+      const lang: SupportedLang = input.userLang === 'ar' ? 'ar' : 'en';
+      const body = renderTemplate('PASSWORD_RESET', lang, {
+        userName: input.userName,
+        resetUrl: input.resetUrl,
+        expiresIn: input.expiresIn,
+      });
+      
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.PASSWORD_RESET,
+        channel: NotificationChannel.EMAIL,
+        recipientUserId: input.userId,
+        recipientEmail: input.userEmail,
+        bodyText: body,
+        dedupeKey: `password-reset:${input.token}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `[enqueuePasswordReset] failed for user=${input.userId}: ${(err as Error)?.message}`,
+        (err as Error)?.stack,
+      );
+    }
+  }
+
   // ─── Admin / ops endpoints (back NotificationsController) ────────────
 
   async findAll(tenantId: string, user: { role: UserRole; locationId?: string | null; id: string }, query: FindNotificationsDto) {

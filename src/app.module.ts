@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { join } from 'path';
@@ -9,6 +10,7 @@ import {
   QueryResolver,
 } from 'nestjs-i18n';
 import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor.js';
 import { PrismaModule } from './infra/database/prisma.module';
 import { RedisModule } from './infra/cache/redis.module';
 import { QueueModule } from './infra/queue/queue.module';
@@ -17,6 +19,7 @@ import databaseConfig from './infra/config/database.config';
 import jwtConfig from './infra/config/jwt.config';
 import storageConfig from './infra/config/storage.config';
 import queueConfig from './infra/config/queue.config';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { AuthModule } from './modules/auth/auth.module';
 import { GuardianAuthModule } from './modules/auth/guardian-auth.module.js';
 import { LocationsModule } from './modules/locations/locations.module.js';
@@ -68,6 +71,9 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
     PrismaModule,
     RedisModule,
     QueueModule,
+    // Plan J — must be imported BEFORE the modules that depend on
+    // AuditChainService (it's @Global so order matters only at registration).
+    AuditModule,
     AuthModule,
     GuardianAuthModule,
     LocationsModule,
@@ -83,6 +89,16 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
     NotificationsModule,
     FeesModule,
     PaymentsModule,
+  ],
+  providers: [
+    // Plan J (F-32) — global audit interceptor. Writes one tamper-evident
+    // AuditLog row per non-GET request through AuditChainService. Service-
+    // level inline writes still happen for operations that need rich
+    // before/after snapshots.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
   ],
 })
 export class AppModule implements NestModule {

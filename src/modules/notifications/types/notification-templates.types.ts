@@ -16,7 +16,8 @@ export type TemplateKey =
   | 'FEE_INVOICE'
   | 'PAYMENT_REMINDER'
   | 'PAYMENT_CONFIRM'
-  | 'GUARDIAN_MAGIC_LINK';
+  | 'GUARDIAN_MAGIC_LINK'
+  | 'PASSWORD_RESET';
 
 /**
  * Shape of variables expected by each template. Renderers receive this
@@ -117,6 +118,16 @@ export interface TemplateVarsByKey {
     guardianName: string;
     magicLinkUrl: string;
     /** Human-friendly TTL hint, e.g. "15 minutes". */
+    expiresIn: string;
+  };
+  /**
+   * Plan J (F-33) — staff/admin password-reset email. The link is a
+   * single-use token endpoint that lands on the web app's reset page.
+   */
+  PASSWORD_RESET: {
+    userName: string;
+    resetUrl: string;
+    /** Human-friendly TTL hint, e.g. "1 hour". */
     expiresIn: string;
   };
 }
