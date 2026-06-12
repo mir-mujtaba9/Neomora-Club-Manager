@@ -1,366 +1,3850 @@
 {
-	"info": {
-		"_postman_id": "a1b2c3d4-e5f6-4a5b-bc6d-7e8f9a0b1c2d",
-		"name": "Neomora Club Manager API",
-		"description": "Collection for testing Auth, Users, and Locations modules of Neomora Club Manager.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "Auth",
-			"item": [
-				{
-					"name": "Login",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"tenantSlug\": \"{{tenantSlug}}\",\n    \"email\": \"admin@example.com\",\n    \"password\": \"password123\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/auth/login",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"login"
-							]
-						}
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"if (response.accessToken) {",
-									"    pm.environment.set(\"accessToken\", response.accessToken);",
-									"    pm.environment.set(\"refreshToken\", response.refreshToken);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					]
-				},
-				{
-					"name": "Refresh Token",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/auth/refresh",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"refresh"
-							]
-						}
-					}
-				},
-				{
-					"name": "Me",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{accessToken}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/auth/me",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"me"
-							]
-						}
-					}
-				},
-				{
-					"name": "Logout",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{accessToken}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/auth/logout",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"logout"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Guardian Auth",
-			"item": [
-				{
-					"name": "Request Magic Link",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"tenantSlug\": \"{{tenantSlug}}\",\n    \"email\": \"guardian@example.com\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/guardian-auth/request-link",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"guardian-auth",
-								"request-link"
-							]
-						}
-					}
-				},
-				{
-					"name": "Verify Magic Link",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"token\": \"paste-token-here\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/guardian-auth/verify",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"guardian-auth",
-								"verify"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Users",
-			"item": [
-				{
-					"name": "List Users",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{accessToken}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/users?page=1&limit=20",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"users"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "1"
-								},
-								{
-									"key": "limit",
-									"value": "20"
-								}
-							]
-						}
-					}
-				},
-				{
-					"name": "Create User",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{accessToken}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"New Staff\",\n    \"email\": \"staff@example.com\",\n    \"password\": \"password123\",\n    \"role\": \"STAFF\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/users",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"users"
-							]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Locations",
-			"item": [
-				{
-					"name": "List Locations",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{accessToken}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/locations",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"locations"
-							]
-						}
-					}
-				},
-				{
-					"name": "Create Location",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{accessToken}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Westside Club\",\n    \"city\": \"London\",\n    \"capacity\": 100\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/locations",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"locations"
-							]
-						}
-					}
-				}
-			]
-		}
-	],
-	"variable": [
-		{
-			"key": "baseUrl",
-			"value": "http://localhost:3000/api/v1",
-			"type": "string"
-		},
-		{
-			"key": "tenantSlug",
-			"value": "main-club",
-			"type": "string"
-		},
-		{
-			"key": "accessToken",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "refreshToken",
-			"value": "",
-			"type": "string"
-		}
-	]
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-4a5b-bc6d-7e8f9a0b1c2e",
+    "name": "Neomora Club Manager API",
+    "description": "# Neomora Club Manager API\n\nComplete Postman collection covering every endpoint exposed by the backend.\n\n## Setup\n\n1. Make sure the API is running locally (`npm run start:dev`) on `http://localhost:3000`.\n2. Open the collection variables (or create an environment) and set:\n   - `baseUrl` — defaults to `http://localhost:3000/api/v1`\n   - `tenantSlug` — the slug for your tenant (e.g. `main-club`)\n   - `staffEmail`, `staffPassword` — a SUPER_ADMIN account to log in with\n3. Run **Auth → Login**. The test script stores `accessToken` and `refreshToken` automatically.\n4. All staff-protected requests then use `Bearer {{accessToken}}` via the request-level auth.\n\n## API key (partner) flow\n\n1. Run **API Keys → Create API Key** — its test script stores the plaintext into `{{apiKey}}`.\n2. On the partner-friendly endpoints (List Participants / Sessions / Payments / Locations etc.), enable the `x-api-key` header. The bearer auth is overridden by the API-key header server-side.\n\n## Notes\n\n- Replace `:id`, `:slug`, `:participantId`, `:docId`, `:noteId`, `:gateway` path placeholders before sending.\n- For Arabic validation messages set `Accept-Language: ar`.\n- File-upload requests use `multipart/form-data` — Postman handles this automatically when you select the file.\n- Full reference docs are in `API_DOCUMENTATION.md` and live Swagger at `http://localhost:3000/api/docs`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Auth (Staff)",
+      "description": "Staff login, refresh, profile, logout, switch tenant, 2FA, password reset.\n\nThe Login request automatically stores `accessToken` and `refreshToken` into the active environment.",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "POST /auth/login\n\nReturns `{ accessToken, refreshToken, user, tenant }`.\n\nWhen the user has `totpEnabled=true`, add `totpCode` (6 digits) to the body.\n\n5 wrong-password attempts in a row lock the account for 15 minutes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{staffPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "    pm.environment.set(\"accessToken\", res.accessToken);",
+                  "    pm.environment.set(\"refreshToken\", res.refreshToken);",
+                  "    console.log(\"✔ accessToken + refreshToken saved\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (with TOTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Same endpoint as Login — use when 2FA is enabled on the account. `totpCode` MUST be exactly 6 digits.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{staffPassword}}\",\n  \"totpCode\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Tokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Rotates both tokens. Saves the new pair to the environment.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "    pm.environment.set(\"accessToken\", res.accessToken);",
+                  "    pm.environment.set(\"refreshToken\", res.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me (Current User)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns the profile of the currently-authenticated staff user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout (this session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "With body → revokes only this session. Without body → revokes ALL sessions for this user in this tenant.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout (all sessions)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "No body. Revokes every active refresh token for this user in this tenant.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Switch Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/switch-tenant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "switch-tenant"
+              ]
+            },
+            "description": "SUPER_ADMIN only. Provide either `tenantId` (uuid) or `tenantSlug`. Returns a fresh token pair scoped to the target tenant.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"target-tenant-slug\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2FA — Setup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "setup"
+              ]
+            },
+            "description": "Begin 2FA enrolment. Returns `{ secret, otpauthUrl }` — scan the URL into your authenticator app then call `/auth/2fa/enable`.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2FA — Enable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/enable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "enable"
+              ]
+            },
+            "description": "Confirms the first TOTP code and activates 2FA on the account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2FA — Disable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/disable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "disable"
+              ]
+            },
+            "description": "Requires BOTH a current TOTP code AND the account password (defends against hijacked sessions).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\",\n  \"password\": \"{{staffPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Always returns 200 regardless of whether the email matches an account (anti-enumeration).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"{{staffEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Single-use token, 1h TTL. Successful reset revokes ALL active refresh tokens for the user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"paste-token-from-email-here\",\n  \"newPassword\": \"NewSecureP@ssw0rd!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Guardian Auth",
+      "description": "Passwordless magic-link authentication for guardians/participants.",
+      "item": [
+        {
+          "name": "Request Magic Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/guardian-auth/request-link",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "guardian-auth",
+                "request-link"
+              ]
+            },
+            "description": "Send a magic link via email and/or SMS. Provide either `email`, `phone`, or both.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"guardian@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Magic Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/guardian-auth/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "guardian-auth",
+                "verify"
+              ]
+            },
+            "description": "Exchange the magic-link token for a guardian JWT. Saves it as `guardianToken` in the environment.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"paste-magic-link-token-here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "    pm.environment.set(\"guardianToken\", res.accessToken);",
+                  "    console.log(\"✔ guardianToken saved\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Guardian Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/guardian-auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "guardian-auth",
+                "me"
+              ]
+            },
+            "description": "Returns the guardian profile. Fails with 500 if called with a staff token (different actor type).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{guardianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. API Keys (SUPER_ADMIN)",
+      "description": "Issue, list, and revoke partner integration keys. The plaintext key is shown ONLY on create.",
+      "item": [
+        {
+          "name": "Create API Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api-keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-keys"
+              ]
+            },
+            "description": "Issue a new API key. The plaintext key is returned in `plaintext` — this is the only time it is shown.\n\nThe test script copies it into the `apiKey` environment variable so the partner-facing requests can use it immediately.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Acme Analytics integration\",\n  \"scopes\": [\n    \"participants:read\",\n    \"sessions:read\",\n    \"payments:read\",\n    \"locations:read\"\n  ],\n  \"rateLimit\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.plaintext) {",
+                  "    pm.environment.set(\"apiKey\", res.plaintext);",
+                  "    console.log(\"✔ apiKey saved (one-time plaintext)\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List API Keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api-keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-keys"
+              ]
+            },
+            "description": "Returns metadata only — never plaintext.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api-keys/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-keys",
+                ":id"
+              ]
+            },
+            "description": "Soft delete via `revokedAt`. Stops working immediately on the next request.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Users (Staff)",
+      "description": "CRUD for staff accounts. SUPER_ADMIN only.",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Roles: SUPER_ADMIN | LOCATION_MANAGER | FINANCE_OFFICER | STAFF.\n\nWhen role=LOCATION_MANAGER, `locationId` (uuid) is required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Staff\",\n  \"email\": \"staff@example.com\",\n  \"password\": \"SecureP@ssw0rd1\",\n  \"role\": \"STAFF\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?role=&locationId=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "description": "Filter by role (optional).",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "description": "Filter by location (optional, uuid).",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"STAFF\",\n  \"locationId\": \"uuid-optional\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Locations",
+      "description": "Club branches / facilities. List endpoint also accepts `x-api-key` (`locations:read`).",
+      "item": [
+        {
+          "name": "Create Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "description": "SUPER_ADMIN only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Westside Club\",\n  \"city\": \"Riyadh\",\n  \"address\": \"123 King Fahd Rd\",\n  \"phone\": \"+9661XXXXXXX\",\n  \"capacity\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Locations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Use INSTEAD of Authorization when calling as a partner integration.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations?status=&city=&search=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "active | inactive | maintenance",
+                  "disabled": true
+                },
+                {
+                  "key": "city",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "JWT (any staff role) OR API key with `locations:read`. LM auto-scoped to own location.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                ":id"
+              ]
+            },
+            "description": "SUPER_ADMIN or LOCATION_MANAGER (own location only).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Westside Premium\",\n  \"address\": \"124 King Fahd Rd\",\n  \"city\": \"Riyadh\",\n  \"phone\": \"+9661XXXXXXX\",\n  \"email\": \"westside@example.com\",\n  \"capacity\": 120,\n  \"status\": \"active\",\n  \"amenities\": [\n    \"pool\",\n    \"gym\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Regenerate Registration QR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations/:id/regenerate-qr",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                ":id",
+                "regenerate-qr"
+              ]
+            },
+            "description": "Rotates the public registration slug.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public Registration Config (by slug)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations/:slug/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                ":slug",
+                "register"
+              ]
+            },
+            "description": "PUBLIC endpoint used by the QR landing page. Returns the location info + list of OPEN sessions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Sessions",
+      "description": "Programmes / batches. List endpoint also accepts `x-api-key` (`sessions:read`).",
+      "item": [
+        {
+          "name": "Create Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions"
+              ]
+            },
+            "description": "SUPER_ADMIN. `status` ∈ DRAFT | OPEN | CLOSED | ARCHIVED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Summer 2026\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-08-31\",\n  \"baseFee\": 1500,\n  \"enrolOpenAt\": \"2026-04-01T00:00:00Z\",\n  \"enrolCloseAt\": \"2026-05-31T23:59:59Z\",\n  \"status\": \"DRAFT\",\n  \"locations\": [\n    {\n      \"locationId\": \"uuid-of-location\",\n      \"feeOverride\": 1200\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Use INSTEAD of Authorization when calling as a partner integration.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions?status=&locationId=&dateFrom=&dateTo=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "DRAFT | OPEN | CLOSED | ARCHIVED",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Session Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                ":id",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"OPEN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Payment Plan to Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/:id/payment-plans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                ":id",
+                "payment-plans"
+              ]
+            },
+            "description": "`type` ∈ FULL | MONTHLY | SEASONAL.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"MONTHLY\",\n  \"instalmentCount\": 3,\n  \"instalmentAmount\": 500,\n  \"dueDates\": [\n    \"2026-06-15\",\n    \"2026-07-15\",\n    \"2026-08-15\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Participants",
+      "description": "Participant CRUD, staff notes, status history, re-enrol. List/get also accept `x-api-key` (`participants:read`).",
+      "item": [
+        {
+          "name": "Register Participant (public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                "register"
+              ]
+            },
+            "description": "Public endpoint. Arabic name fields must use Arabic script.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"uuid-optional\",\n  \"locationSlug\": \"westside\",\n  \"firstNameEn\": \"Ahmed\",\n  \"firstNameAr\": \"أحمد\",\n  \"lastNameEn\": \"Khan\",\n  \"lastNameAr\": \"خان\",\n  \"dateOfBirth\": \"2015-04-12\",\n  \"gender\": \"MALE\",\n  \"phone\": \"+9665XXXXXXXX\",\n  \"nationality\": \"SA\",\n  \"preferredLang\": \"ar\",\n  \"guardian\": {\n    \"fullName\": \"Father Khan\",\n    \"relationship\": \"father\",\n    \"phone\": \"+9665XXXXXXXX\",\n    \"email\": \"father@example.com\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Participants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Use INSTEAD of Authorization when calling as a partner integration.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants?status=&locationId=&sessionId=&paymentPlanType=&dateFrom=&dateTo=&search=&sortBy=createdAt&order=desc&page=1&limit=20&export=csv",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "INQUIRY | DOCUMENTS_PENDING | FEE_PENDING | ACTIVE | ON_HOLD | COMPLETED | WITHDRAWN",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sessionId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "paymentPlanType",
+                  "value": "",
+                  "description": "FULL | MONTHLY | SEASONAL",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "",
+                  "description": "ISO date / datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "",
+                  "description": "ISO date / datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "matches uniqueId / phone / name",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt",
+                  "disabled": false
+                },
+                {
+                  "key": "order",
+                  "value": "desc",
+                  "description": "asc | desc",
+                  "disabled": false
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                },
+                {
+                  "key": "export",
+                  "value": "csv",
+                  "description": "Set to \"csv\" to download a CSV file",
+                  "disabled": true
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Participant by Id (360° profile)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Use INSTEAD of Authorization when calling as a partner integration.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Participant Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"optional audit note\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Staff Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id/staff-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id",
+                "staff-notes"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Staff Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id/staff-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id",
+                "staff-notes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Followed up on Sunday — paid in cash.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Staff Note",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id/staff-notes/:noteId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id",
+                "staff-notes",
+                ":noteId"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Status History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id/status-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id",
+                "status-history"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Re-enrol (convenience)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/participants/:id/re-enrol?allowOverlap=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "participants",
+                ":id",
+                "re-enrol"
+              ],
+              "query": [
+                {
+                  "key": "allowOverlap",
+                  "value": "true",
+                  "description": "SUPER_ADMIN / FINANCE_OFFICER only",
+                  "disabled": true
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"uuid-of-new-session\",\n  \"paymentPlanType\": \"MONTHLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Enrolments",
+      "description": "Direct enrolment / re-enrolment with overlap guards.",
+      "item": [
+        {
+          "name": "List Enrolments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments?sessionId=&locationId=&status=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "enrolments"
+              ],
+              "query": [
+                {
+                  "key": "sessionId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "WAITLISTED | DOCUMENTS_PENDING | FEE_PENDING | ACTIVE | ON_HOLD | COMPLETED | WITHDRAWN",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Enrolment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments?allowOverlap=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "enrolments"
+              ],
+              "query": [
+                {
+                  "key": "allowOverlap",
+                  "value": "true",
+                  "description": "SUPER_ADMIN / FINANCE_OFFICER only",
+                  "disabled": true
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantId\": \"uuid\",\n  \"sessionId\": \"uuid\",\n  \"locationId\": \"uuid\",\n  \"paymentPlanType\": \"MONTHLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Re-enrol (by previous enrolment id)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments/:id/re-enrol?allowOverlap=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "enrolments",
+                ":id",
+                "re-enrol"
+              ],
+              "query": [
+                {
+                  "key": "allowOverlap",
+                  "value": "true",
+                  "description": "SUPER_ADMIN / FINANCE_OFFICER only",
+                  "disabled": true
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"uuid-of-new-session\",\n  \"paymentPlanType\": \"FULL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Fees (mounted under /enrolments)",
+      "description": "Payment plan + invoice + fee-override routes for an enrolment.",
+      "item": [
+        {
+          "name": "Create Payment Plan for Enrolment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments/:enrolmentId/payment-plan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "enrolments",
+                ":enrolmentId",
+                "payment-plan"
+              ]
+            },
+            "description": "`planType` ∈ FULL | MONTHLY | SEASONAL. `instalmentCount` ignored when FULL (forced to 1).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planType\": \"MONTHLY\",\n  \"instalmentCount\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Invoices for Enrolment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments/:enrolmentId/invoices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "enrolments",
+                ":enrolmentId",
+                "invoices"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set / Clear Fee Override",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments/:enrolmentId/fee-override",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "enrolments",
+                ":enrolmentId",
+                "fee-override"
+              ]
+            },
+            "description": "Pass `\"amount\": null` to clear the override. SUPER_ADMIN / FINANCE_OFFICER.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1200,\n  \"reason\": \"Family discount\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Invoices",
+      "description": "Generate or refresh a checkout URL for an invoice.",
+      "item": [
+        {
+          "name": "Issue Payment Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/:id/payment-link",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                ":id",
+                "payment-link"
+              ]
+            },
+            "description": "Safe to call repeatedly — the stored link is reused while valid.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. Payments",
+      "description": "Offline payment recording + verification. List/get also accept `x-api-key` (`payments:read`).",
+      "item": [
+        {
+          "name": "Upload Proof of Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/proof-upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "proof-upload"
+              ]
+            },
+            "description": "Returns `{ storageKey }` to feed into POST /payments/offline.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Receipt image / PDF ≤ 10 MB"
+                },
+                {
+                  "key": "enrolmentId",
+                  "value": "uuid-of-enrolment",
+                  "type": "text"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Record Offline Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/offline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "offline"
+              ]
+            },
+            "description": "`method` ∈ ONLINE_CARD | SADAD | MADA | BANK_TRANSFER | CASH. Status starts at PENDING_VERIFICATION.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enrolmentId\": \"uuid\",\n  \"invoiceId\": \"uuid-optional\",\n  \"method\": \"CASH\",\n  \"amount\": 500,\n  \"proofKey\": \"proofs/<tenant>/<enrolment>/<file>\",\n  \"idempotencyKey\": \"unique-string-per-attempt\",\n  \"note\": \"optional\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/:id/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                ":id",
+                "verify"
+              ]
+            },
+            "description": "Marks the payment COMPLETED and applies funds.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/:id/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                ":id",
+                "reject"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Wrong amount transferred\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Use INSTEAD of Authorization when calling as a partner integration.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments?enrolmentId=&status=&gateway=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "enrolmentId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "PENDING | COMPLETED | FAILED | REFUNDED | PENDING_VERIFICATION",
+                  "disabled": true
+                },
+                {
+                  "key": "gateway",
+                  "value": "",
+                  "description": "MOYASAR | PAYTABS | HYPERPAY | OFFLINE",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment by Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Use INSTEAD of Authorization when calling as a partner integration.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                ":id"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. Payment Webhooks",
+      "description": "Endpoint the payment gateway calls. Always returns 200 (audit-row first, verify later).",
+      "item": [
+        {
+          "name": "Receive Webhook (Moyasar)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-signature",
+                "value": "<gateway-signed-header>",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payments/moyasar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payments",
+                "moyasar"
+              ]
+            },
+            "description": "Path `:gateway` ∈ moyasar | paytabs | hyperpay. Payload shape is gateway-specific.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"gateway-event-id\",\n  \"status\": \"paid\",\n  \"amount\": 50000,\n  \"currency\": \"SAR\",\n  \"metadata\": {\n    \"invoiceId\": \"uuid\",\n    \"tenantId\": \"uuid\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Receive Webhook (PayTabs)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "x-paytabs-signature",
+                "value": "<gateway-signed-header>",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payments/paytabs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payments",
+                "paytabs"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tran_ref\": \"TST-…\",\n  \"cart_id\": \"uuid\",\n  \"payment_result\": {\n    \"response_status\": \"A\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Receive Webhook (HyperPay)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              },
+              {
+                "key": "paymentid",
+                "value": "<gateway-event-id>",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payments/hyperpay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payments",
+                "hyperpay"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"hp-event\",\n  \"result\": {\n    \"code\": \"000.000.000\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. Documents",
+      "description": "Per-participant document upload / verification / download.",
+      "item": [
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/:participantId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                ":participantId"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "≤ 10 MB"
+                },
+                {
+                  "key": "docType",
+                  "value": "BIRTH_CERTIFICATE",
+                  "type": "text",
+                  "description": "BIRTH_CERTIFICATE | PASSPORT | MEDICAL_CLEARANCE | ID_PHOTO | OTHER"
+                },
+                {
+                  "key": "notes",
+                  "value": "",
+                  "type": "text",
+                  "description": "Optional"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Signed Download URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/:participantId/:docId/url?disposition=inline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                ":participantId",
+                ":docId",
+                "url"
+              ],
+              "query": [
+                {
+                  "key": "disposition",
+                  "value": "inline",
+                  "description": "inline | attachment (default inline)",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Returns `{ url, expiresIn: 900 }`. Real S3 pre-signed URL when S3 is configured.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Documents for Participant",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/by-participant/:participantId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "by-participant",
+                ":participantId"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete Document",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/:participantId/:docId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                ":participantId",
+                ":docId"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify / Reject Document",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/:docId/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                ":docId",
+                "verify"
+              ]
+            },
+            "description": "`status` ∈ VERIFIED | REJECTED. Auto-promotes the participant DOCUMENTS_PENDING → FEE_PENDING when all required docs are verified.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VERIFIED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Local Signed Download (no-S3 fallback)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/download?key=%3CstorageKey%3E&token=%3Chmac%3E&exp=%3Cunix-ts%3E&disposition=inline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "download"
+              ],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "<storageKey>",
+                  "disabled": false
+                },
+                {
+                  "key": "token",
+                  "value": "<hmac>",
+                  "disabled": false
+                },
+                {
+                  "key": "exp",
+                  "value": "<unix-ts>",
+                  "disabled": false
+                },
+                {
+                  "key": "disposition",
+                  "value": "inline",
+                  "description": "inline | attachment",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "PUBLIC — the HMAC token in the URL is the bearer credential. Only used when S3 is NOT configured."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14. Notifications",
+      "description": "Admin-only read + retry. There is no public POST — notifications are created server-side as side effects.",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications?status=&type=&channel=&participantId=&recipientUserId=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "QUEUED | SENT | FAILED | DELIVERED",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "REGISTRATION_CONFIRM | DOCUMENT_REQUEST | FEE_INVOICE | PAYMENT_CONFIRM | PAYMENT_REMINDER | SESSION_START | WAITLIST_OFFER | BROADCAST | STAFF_ALERT | GUARDIAN_MAGIC_LINK | PASSWORD_RESET",
+                  "disabled": true
+                },
+                {
+                  "key": "channel",
+                  "value": "",
+                  "description": "WHATSAPP | EMAIL",
+                  "disabled": true
+                },
+                {
+                  "key": "participantId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "recipientUserId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                ":id"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Failed Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/:id/retry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                ":id",
+                "retry"
+              ]
+            },
+            "description": "SUPER_ADMIN only.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "15. Waitlist",
+      "description": "Staff routes are JWT-guarded; guardian routes are PUBLIC and use the offer token as credential.",
+      "item": [
+        {
+          "name": "List Waitlist (staff)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/waitlist?sessionId=uuid&locationId=uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "waitlist"
+              ],
+              "query": [
+                {
+                  "key": "sessionId",
+                  "value": "uuid",
+                  "disabled": false
+                },
+                {
+                  "key": "locationId",
+                  "value": "uuid",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Both `sessionId` and `locationId` are required UUIDs.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send Waitlist Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/waitlist/:id/offer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "waitlist",
+                ":id",
+                "offer"
+              ]
+            },
+            "description": "Generates a single-use token and notifies the guardian.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Staff Withdraw",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/waitlist/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "waitlist",
+                ":id"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Offer (guardian)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/waitlist/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "waitlist",
+                "accept"
+              ]
+            },
+            "description": "PUBLIC. `paymentPlanType` ∈ FULL | MONTHLY | SEASONAL.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<waitlist-offer-token>\",\n  \"paymentPlanType\": \"MONTHLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Decline Offer (guardian)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/waitlist/decline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "waitlist",
+                "decline"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<waitlist-offer-token>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guardian Withdraw",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/waitlist/withdraw",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "waitlist",
+                "withdraw"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<waitlist-offer-token>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "16. Public Registration",
+      "description": "Public form routes — no JWT. Location context is carried in the URL slug.",
+      "item": [
+        {
+          "name": "Get Form Config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/register/:slug",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "register",
+                ":slug"
+              ]
+            },
+            "description": "Returns the location info and OPEN sessions to populate the form."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Form",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/register/:slug",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "register",
+                ":slug"
+              ]
+            },
+            "description": "When `sessionId` is omitted, the participant is created at status INQUIRY with no enrolment.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Ahmed\",\n  \"firstNameAr\": \"أحمد\",\n  \"lastNameEn\": \"Khan\",\n  \"lastNameAr\": \"خان\",\n  \"dateOfBirth\": \"2015-04-12\",\n  \"gender\": \"MALE\",\n  \"phone\": \"+9665XXXXXXXX\",\n  \"nationality\": \"SA\",\n  \"preferredLang\": \"ar\",\n  \"sessionId\": \"uuid-optional\",\n  \"guardian\": {\n    \"fullName\": \"Father Khan\",\n    \"relationship\": \"father\",\n    \"phone\": \"+9665XXXXXXXX\",\n    \"email\": \"father@example.com\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "17. Guardian Portal",
+      "description": "Single-use signed token routes for the guardian portal.",
+      "item": [
+        {
+          "name": "Get Portal by Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portal/:token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portal",
+                ":token"
+              ]
+            },
+            "description": "PUBLIC. Returns participant + enrolments + invoices visible to the guardian."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "18. Reporting",
+      "description": "Dashboards and time-series reports. JWT only.",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "dashboard"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fees Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/fees?sessionId=&locationId=&month=&groupBy=location&page=1&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "fees"
+              ],
+              "query": [
+                {
+                  "key": "sessionId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "month",
+                  "value": "",
+                  "description": "YYYY-MM",
+                  "disabled": true
+                },
+                {
+                  "key": "groupBy",
+                  "value": "location",
+                  "description": "location | session",
+                  "disabled": false
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "LM auto-scoped to their location.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Funnel Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/funnel?startDate=2026-01-01&endDate=2026-12-31&sessionId=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "funnel"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31",
+                  "disabled": false
+                },
+                {
+                  "key": "sessionId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revenue Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/revenue?year=2026&locationId=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "revenue"
+              ],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2026",
+                  "disabled": false
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Capacity Utilisation (time-series)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reporting/capacity-utilisation?from=2026-01-01&to=2026-12-31&interval=day&locationId=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reporting",
+                "capacity-utilisation"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                },
+                {
+                  "key": "interval",
+                  "value": "day",
+                  "description": "day | week | month",
+                  "disabled": false
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Maximum span is 366 buckets.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "19. Audit",
+      "description": "Tamper-evident audit chain verification (SUPER_ADMIN).",
+      "item": [
+        {
+          "name": "Verify Audit Chain",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "en",
+                "type": "text",
+                "description": "Use \"ar\" to receive Arabic validation messages.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit/verify-chain",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "verify-chain"
+              ]
+            },
+            "description": "Walks every AuditLog row in createdAt order, recomputes SHA-256. Returns `{ ok, checked }` or `{ ok:false, firstBadId, reason }`.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "tenantSlug",
+      "value": "main-club",
+      "type": "string"
+    },
+    {
+      "key": "staffEmail",
+      "value": "admin@example.com",
+      "type": "string"
+    },
+    {
+      "key": "staffPassword",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guardianToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "string"
+    }
+  ]
 }
