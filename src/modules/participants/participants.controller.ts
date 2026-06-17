@@ -81,7 +81,7 @@ export class ParticipantsController {
 			return res.send(csv);
 		}
 
-		return result;
+		return res.json(result);
 	}
 
 	@Get(':id')
