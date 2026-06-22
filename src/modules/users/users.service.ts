@@ -44,9 +44,9 @@ export class UsersService {
 		}
 
 		let locationId: string | null = dto.locationId ?? null;
-		if (dto.role === UserRole.LOCATION_MANAGER) {
+		if (dto.role === UserRole.LOCATION_MANAGER || dto.role === UserRole.STAFF) {
 			if (!locationId) {
-				throw new BadRequestException('locationId is required for LOCATION_MANAGER');
+				throw new BadRequestException(`locationId is required for ${dto.role}`);
 			}
 			await this.assertValidLocation(tenantId, locationId);
 		} else {
@@ -197,10 +197,10 @@ export class UsersService {
 		let nextLocationId: string | null = existing.locationId;
 
 		if (dto.role) {
-			if (nextRole === UserRole.LOCATION_MANAGER) {
+			if (nextRole === UserRole.LOCATION_MANAGER || nextRole === UserRole.STAFF) {
 				nextLocationId = dto.locationId ?? existing.locationId;
 				if (!nextLocationId) {
-					throw new BadRequestException('locationId is required for LOCATION_MANAGER');
+					throw new BadRequestException(`locationId is required for ${nextRole}`);
 				}
 
 				await this.assertValidLocation(tenantId, nextLocationId);
@@ -208,8 +208,8 @@ export class UsersService {
 				nextLocationId = null;
 			}
 		} else if (dto.locationId) {
-			if ((existing.role as unknown as UserRole) !== UserRole.LOCATION_MANAGER) {
-				throw new BadRequestException('locationId can only be updated for LOCATION_MANAGER');
+			if ((existing.role as unknown as UserRole) !== UserRole.LOCATION_MANAGER && (existing.role as unknown as UserRole) !== UserRole.STAFF) {
+				throw new BadRequestException('locationId can only be updated for LOCATION_MANAGER or STAFF');
 			}
 			await this.assertValidLocation(tenantId, dto.locationId);
 			nextLocationId = dto.locationId;

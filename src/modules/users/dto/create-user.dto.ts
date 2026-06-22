@@ -28,7 +28,7 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   role!: UserRole;
 
-  @ValidateIf((o: CreateUserDto) => o.role === UserRole.LOCATION_MANAGER)
+  @ValidateIf((o: CreateUserDto) => o.role === UserRole.LOCATION_MANAGER || o.role === UserRole.STAFF)
   @IsUUID()
   locationId?: string;
 }
