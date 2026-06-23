@@ -213,6 +213,7 @@ export class ParticipantsService {
 				orderBy: { [sortBy]: order },
 				include: {
 					location: { select: { id: true, name: true, city: true } },
+					guardians: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' } },
 				},
 			}),
 			this.prisma.participant.count({ where }),

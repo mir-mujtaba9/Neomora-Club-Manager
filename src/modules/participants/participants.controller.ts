@@ -62,9 +62,22 @@ export class ParticipantsController {
 		if (query.export === 'csv') {
 			// build CSV
 			const rows = [
-				['uniqueId', 'firstNameEn', 'lastNameEn', 'phone', 'status', 'location', 'createdAt'],
+				[
+					'uniqueId',
+					'firstNameEn',
+					'lastNameEn',
+					'phone',
+					'status',
+					'location',
+					'guardianName',
+					'guardianRelationship',
+					'guardianPhone',
+					'guardianEmail',
+					'createdAt',
+				],
 			];
 			for (const p of result.items) {
+				const primaryGuardian = (p as any).guardians?.[0];
 				rows.push([
 					p.uniqueId,
 					p.firstNameEn,
@@ -72,6 +85,10 @@ export class ParticipantsController {
 					p.phone,
 					p.status,
 					p.location?.name ?? '',
+					primaryGuardian?.fullName ?? '',
+					primaryGuardian?.relationship ?? '',
+					primaryGuardian?.phone ?? '',
+					primaryGuardian?.email ?? '',
 					p.createdAt?.toISOString?.() ?? p.createdAt,
 				]);
 			}
