@@ -15,6 +15,10 @@ export class FindParticipantsDto {
   @IsUUID()
   sessionId?: string;
 
+  @IsOptional()
+  @IsUUID()
+  guardianId?: string;
+
   /**
    * Plan I (F-26) — filter participants whose ENROLMENTS use this payment plan.
    * Resolves to `enrolments: { some: { paymentPlanType } }` in service.

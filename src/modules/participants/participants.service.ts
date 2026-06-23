@@ -149,6 +149,7 @@ export class ParticipantsService {
 			status,
 			locationId,
 			sessionId,
+			guardianId,
 			paymentPlanType,
 			dateFrom,
 			dateTo,
@@ -163,6 +164,28 @@ export class ParticipantsService {
 		const where: any = { tenantId, deletedAt: null };
 		if (status) where.status = status;
 		if (locationId) where.locationId = locationId;
+
+		if (guardianId) {
+			const targetGuardian = await this.prisma.guardian.findFirst({
+				where: { id: guardianId, tenantId, deletedAt: null },
+			});
+			if (!targetGuardian) {
+				throw new NotFoundException('Guardian not found');
+			}
+			const sameGuardians = await this.prisma.guardian.findMany({
+				where: {
+					tenantId,
+					deletedAt: null,
+					OR: [
+						{ phone: targetGuardian.phone },
+						...(targetGuardian.email ? [{ email: targetGuardian.email }] : []),
+					],
+				},
+				select: { participantId: true },
+			});
+			const participantIds = sameGuardians.map((g) => g.participantId);
+			where.id = { in: participantIds };
+		}
 
 		// Plan I (F-26) — sessionId + paymentPlanType both target the same
 		// enrolments relation, so AND them inside a single `some` clause to
