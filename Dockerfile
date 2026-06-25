@@ -33,9 +33,14 @@ WORKDIR /usr/src/app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Copy package config and prisma schema
+# Install ts-node + typescript globally so prisma migrate deploy can parse prisma.config.ts
+RUN npm install -g ts-node typescript
+
+# Copy package config, prisma schema, and Prisma 7 config file
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
+COPY tsconfig.json ./
 
 # Copy compiled files and production node_modules from the builder stage
 COPY --from=builder /usr/src/app/node_modules ./node_modules
