@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+.git
+.gitignore
+*.log
+Dockerfile
+.dockerignore
+README.md
+juventus-academy-change-requests.md
+neomora-api.postman_collection.json
+scripts
+smoke-test-allocator.ts
+tsconfig.json
+nest-cli.json
+.gemini
