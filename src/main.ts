@@ -63,8 +63,8 @@ async function bootstrap() {
     .setTitle('Neomora Club Manager API')
     .setDescription(
       'Multi-tenant club management platform. ' +
-        'Staff endpoints use Bearer JWT; partner / integration endpoints accept ' +
-        'either a Bearer JWT OR an `x-api-key` header (issued via POST /api-keys).',
+      'Staff endpoints use Bearer JWT; partner / integration endpoints accept ' +
+      'either a Bearer JWT OR an `x-api-key` header (issued via POST /api-keys).',
     )
     .setVersion('1.0')
     .addBearerAuth(
