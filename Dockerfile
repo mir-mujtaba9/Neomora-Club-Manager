@@ -1,5 +1,5 @@
 # Stage 1: Build the NestJS application
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -14,7 +14,9 @@ RUN npm ci
 COPY . .
 
 # Generate Prisma client before building (needed for TS compilation)
-RUN npx prisma generate
+# We supply a dummy DATABASE_URL here because Prisma 7 config-loading throws if env var is missing,
+# even though the schema compilation itself does not establish database connections.
+RUN DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy npx prisma generate
 
 # Compile TypeScript to JavaScript (outputs to dist/)
 RUN npm run build
@@ -23,7 +25,7 @@ RUN npm run build
 RUN npm prune --production
 
 # Stage 2: Production runtime environment
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /usr/src/app
 
