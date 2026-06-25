@@ -135,7 +135,7 @@ export class ParticipantsController {
 
 	// ─── Plan H — Staff notes (F-22) ────────────────────────────────────
 	// Notes are visible to staff only; the @Roles guard keeps guardians out.
-
+// Staff notes are not part of the participant profile returned by GET /:id, but are listed separately via GET /:id/staff-notes.
 	@Get(':id/staff-notes')
 	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
 	async listStaffNotes(
