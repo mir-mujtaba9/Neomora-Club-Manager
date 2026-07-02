@@ -197,6 +197,7 @@ model Tenant {
   staffNotes          StaffNote[]
   webhookEvents       WebhookEvent[]
   guardians           Guardian[]
+  attendanceRecords   AttendanceRecord[]
   @@map("tenants")
 }
 
@@ -226,6 +227,7 @@ model Location {
   enrolments       Enrolment[]
   waitlist         Waitlist[]
   broadcastMessages BroadcastMessage[] @relation("FilterLocation")
+  attendanceRecords AttendanceRecord[]
 
   @@index([tenantId, status])
   @@map("locations")
@@ -265,6 +267,7 @@ model User {
   notifications  Notification[] @relation("NotificationRecipientUser")
   // Plan J (F-33) — password reset audit trail.
   passwordResetTokens PasswordResetToken[]
+  markedAttendance AttendanceRecord[] @relation("MarkedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId, role])
@@ -366,6 +369,7 @@ model Session {
   enrolments      Enrolment[]
   waitlist        Waitlist[]
   broadcastMessages BroadcastMessage[] @relation("FilterSession")
+  attendanceRecords AttendanceRecord[]
 
   @@index([tenantId, status])
   @@map("sessions")
@@ -442,6 +446,7 @@ model Participant {
   staffNotes    StaffNote[]
   notifications Notification[]
   waitlist      Waitlist[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([tenantId, uniqueId])
   @@index([tenantId, status])
@@ -809,6 +814,39 @@ model StaffNote {
 
   @@index([tenantId, participantId])
   @@map("staff_notes")
+}
+
+// ─────────────────────────────────────────────
+// ATTENDANCE RECORDS
+// ─────────────────────────────────────────────
+// One row per participant per calendar date per session.
+// `present = true` means the participant attended; `false` means absent.
+// Staff can upsert (overwrite) a record on the same date without creating
+// a duplicate — the unique index on (tenantId, participantId, sessionId, date)
+// enforces this at the database level.
+
+model AttendanceRecord {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  participantId String   @map("participant_id")
+  sessionId     String   @map("session_id")
+  locationId    String   @map("location_id")
+  markedById    String   @map("marked_by_id")
+  date          DateTime @map("date") @db.Date
+  present       Boolean  @default(true)
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  participant Participant @relation(fields: [participantId], references: [id])
+  session     Session     @relation(fields: [sessionId], references: [id])
+  location    Location    @relation(fields: [locationId], references: [id])
+  markedBy    User        @relation("MarkedBy", fields: [markedById], references: [id])
+
+  @@unique([tenantId, participantId, sessionId, date])
+  @@index([tenantId, sessionId, locationId, date])
+  @@map("attendance_records")
 }
 
 // ─────────────────────────────────────────────

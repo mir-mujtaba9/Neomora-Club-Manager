@@ -37,6 +37,7 @@ import { RegistrationModule } from './modules/registration/registration.module.j
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { FeesModule } from './modules/fees/fees.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
+import { AttendanceModule } from './modules/attendance/attendance.module.js';
 
 @Module({
   imports: [
@@ -91,6 +92,8 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
     NotificationsModule,
     FeesModule,
     PaymentsModule,
+    // Plan L — staff-only daily attendance tracking.
+    AttendanceModule,
     // Plan K (F-34) — partner API key management. JWT-only controller,
     // SUPER_ADMIN role required. The matching `JwtOrApiKeyGuard` lives
     // in common/ so partner controllers can use it without importing.
