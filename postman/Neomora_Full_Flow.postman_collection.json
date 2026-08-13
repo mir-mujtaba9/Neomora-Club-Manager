@@ -1,0 +1,723 @@
+{
+  "info": {
+    "name": "Neomora Club Manager — Full End-to-End Flow",
+    "description": "Complete API test flow: Auth → Location → Season → Term → Program → Public Registration → Staff Management.\nAll variables are set automatically by test scripts — run folders in order.",
+    "_postman_id": "neomora-full-flow-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:3000",       "type": "string" },
+    { "key": "accessToken",  "value": "",                             "type": "string" },
+    { "key": "locationId",   "value": "",                             "type": "string" },
+    { "key": "locationSlug", "value": "",                             "type": "string" },
+    { "key": "seasonId",     "value": "",                             "type": "string" },
+    { "key": "termId",       "value": "",                             "type": "string" },
+    { "key": "programId",    "value": "",                             "type": "string" },
+    { "key": "ruleId",       "value": "",                             "type": "string" },
+    { "key": "participantId","value": "",                             "type": "string" },
+    { "key": "enrolmentId",  "value": "",                             "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "1 — Auth",
+      "item": [
+        {
+          "name": "Login as SUPER_ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('accessToken', r.accessToken ?? r.data?.accessToken ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@example.com\",\n  \"password\": \"your-password-here\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "2 — Location",
+      "item": [
+        {
+          "name": "Create Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const loc = r.data ?? r;",
+                  "pm.collectionVariables.set('locationId', loc.id ?? '');",
+                  "pm.collectionVariables.set('locationSlug', loc.registrationSlug ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/locations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Main Academy\",\n  \"city\": \"Dubai\",\n  \"address\": \"123 Academy Road, Dubai\",\n  \"phone\": \"+971501234567\",\n  \"capacity\": 30,\n  \"defaultLang\": \"en\",\n  \"status\": \"active\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Locations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/locations"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "3 — Season",
+      "item": [
+        {
+          "name": "Create Season",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const s = r.data ?? r;",
+                  "pm.collectionVariables.set('seasonId', s.id ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"2025-2026 Academic Year\",\n  \"startDate\": \"2025-09-01T00:00:00.000Z\",\n  \"endDate\": \"2026-06-30T00:00:00.000Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Season (with term summary)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}"
+          }
+        },
+        {
+          "name": "List Seasons",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/seasons?page=1&limit=20",
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "4 — Term",
+      "item": [
+        {
+          "name": "Create Term",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const t = r.data ?? r;",
+                  "pm.collectionVariables.set('termId', t.id ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"termNumber\": 1,\n  \"startDate\": \"2025-09-01T00:00:00.000Z\",\n  \"endDate\": \"2025-11-30T00:00:00.000Z\",\n  \"totalWeeks\": 13\n}"
+            }
+          }
+        },
+        {
+          "name": "Advance Term to OPEN",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{termId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"OPEN\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Advance Term to ONGOING",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{termId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ONGOING\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Close Term",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{termId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CLOSED\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "5 — Program",
+      "item": [
+        {
+          "name": "Create Program",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const p = r.data ?? r;",
+                  "pm.collectionVariables.set('programId', p.id ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/programs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FOOTBALL-JR\",\n  \"name\": \"Junior Football Academy\",\n  \"locationId\": \"{{locationId}}\",\n  \"baseFeePerWeek\": \"50.00\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Program Rule — U8 (2017-2019)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const rule = r.data ?? r;",
+                  "pm.collectionVariables.set('ruleId', rule.id ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/programs/{{programId}}/rules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"U8\",\n  \"ruleType\": \"BIRTH_YEAR_RANGE\",\n  \"minBirthYear\": 2017,\n  \"maxBirthYear\": 2019,\n  \"sessionsPerWeek\": 2,\n  \"capacity\": 15\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Program Rule — U10 (2015-2016)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/programs/{{programId}}/rules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"U10\",\n  \"ruleType\": \"BIRTH_YEAR_RANGE\",\n  \"minBirthYear\": 2015,\n  \"maxBirthYear\": 2016,\n  \"sessionsPerWeek\": 3,\n  \"capacity\": 15\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Program (with rules)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/programs/{{programId}}"
+          }
+        },
+        {
+          "name": "List Programs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/programs?page=1&limit=20",
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Program base fee",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/programs/{{programId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseFeePerWeek\": \"55.00\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "6 — Public Registration",
+      "item": [
+        {
+          "name": "GET Form Config (shows open terms + programs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Has programs', () => pm.expect(r.programs).to.be.an('array'));",
+                  "pm.test('Has sessions', () => pm.expect(r.sessions).to.be.an('array'));",
+                  "// Log to console for debugging",
+                  "console.log('Open terms:', r.sessions?.length);",
+                  "console.log('Programs:', r.programs?.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/register/{{locationSlug}}",
+            "description": "Public endpoint — no auth required.\nReturns: location info, open terms (sessions), and available programmes with cohort rules.\nFrontend uses the programmes list to show eligible cohorts based on child DOB."
+          }
+        },
+        {
+          "name": "POST Submit Registration (with Program — U8 child)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Enrolled', () => pm.expect(r.enrolmentStatus).to.eql('ENROLLED'));",
+                  "pm.collectionVariables.set('participantId', r.participantId ?? '');",
+                  "pm.collectionVariables.set('enrolmentId',  r.enrolmentId  ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/register/{{locationSlug}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Ahmed\",\n  \"lastNameEn\": \"Al-Rashid\",\n  \"dateOfBirth\": \"2018-03-15\",\n  \"gender\": \"MALE\",\n  \"phone\": \"+971501112233\",\n  \"nationality\": \"Emirati\",\n  \"preferredLang\": \"en\",\n  \"sessionId\": \"{{termId}}\",\n  \"programId\": \"{{programId}}\",\n  \"guardian\": {\n    \"fullName\": \"Mohammed Al-Rashid\",\n    \"relationship\": \"Father\",\n    \"phone\": \"+971509998877\",\n    \"email\": \"m.alrashid@example.com\"\n  }\n}"
+            },
+            "description": "Fee = Program.baseFeePerWeek × term.totalWeeks = 50 × 13 = AED 650.\nCapacity checked against U8 ProgramRule (born 2017-2019) not global location capacity."
+          }
+        },
+        {
+          "name": "POST Submit Registration (Inquiry only — no session)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Inquiry', () => pm.expect(r.enrolmentStatus).to.eql('NONE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/register/{{locationSlug}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Sara\",\n  \"lastNameEn\": \"Hassan\",\n  \"dateOfBirth\": \"2016-07-20\",\n  \"gender\": \"FEMALE\",\n  \"phone\": \"+971507776655\",\n  \"preferredLang\": \"ar\",\n  \"guardian\": {\n    \"fullName\": \"Fatima Hassan\",\n    \"relationship\": \"Mother\",\n    \"phone\": \"+971508887766\",\n    \"email\": \"f.hassan@example.com\"\n  }\n}"
+            },
+            "description": "No sessionId → participant is created at INQUIRY status. Staff follow up manually."
+          }
+        },
+        {
+          "name": "POST Submit Registration (error: invalid program for location)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/register/{{locationSlug}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Test\",\n  \"lastNameEn\": \"User\",\n  \"dateOfBirth\": \"2017-01-01\",\n  \"gender\": \"MALE\",\n  \"phone\": \"+971500000000\",\n  \"sessionId\": \"{{termId}}\",\n  \"programId\": \"00000000-0000-0000-0000-000000000000\",\n  \"guardian\": {\n    \"fullName\": \"Parent Name\",\n    \"relationship\": \"Parent\",\n    \"phone\": \"+971500000001\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "POST Submit Registration (error: programId without sessionId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/register/{{locationSlug}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Test\",\n  \"lastNameEn\": \"User\",\n  \"dateOfBirth\": \"2017-01-01\",\n  \"gender\": \"MALE\",\n  \"phone\": \"+971500000002\",\n  \"programId\": \"{{programId}}\",\n  \"guardian\": {\n    \"fullName\": \"Parent Name\",\n    \"relationship\": \"Parent\",\n    \"phone\": \"+971500000003\"\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "7 — Staff: Enrolments",
+      "item": [
+        {
+          "name": "List Enrolments (with program info)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments?locationId={{locationId}}&page=1&limit=20",
+              "query": [
+                { "key": "locationId", "value": "{{locationId}}" },
+                { "key": "page",       "value": "1" },
+                { "key": "limit",      "value": "20" }
+              ]
+            },
+            "description": "Response now includes `program: { id, code, name }` on each enrolment row."
+          }
+        },
+        {
+          "name": "List Enrolments by Session (Term)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments?sessionId={{termId}}&page=1&limit=50",
+              "query": [
+                { "key": "sessionId", "value": "{{termId}}" },
+                { "key": "page",      "value": "1" },
+                { "key": "limit",     "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff Enrol Participant (direct)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantId\": \"{{participantId}}\",\n  \"sessionId\": \"{{termId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"paymentPlanType\": \"FULL\",\n  \"programId\": \"{{programId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Advance Enrolment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/{{enrolmentId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "8 — Staff: Participants",
+      "item": [
+        {
+          "name": "Get Participant Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/participants/{{participantId}}",
+            "description": "Returns participant details with their enrolment history."
+          }
+        },
+        {
+          "name": "List Participants at Location",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/participants?locationId={{locationId}}&page=1&limit=20",
+              "query": [
+                { "key": "locationId", "value": "{{locationId}}" },
+                { "key": "page",       "value": "1" },
+                { "key": "limit",      "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "9 — Term Renewal",
+      "item": [
+        {
+          "name": "Create Term 2 (next term)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const t = r.data ?? r;",
+                  "pm.collectionVariables.set('term2Id', t.id ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"termNumber\": 2,\n  \"startDate\": \"2025-12-01T00:00:00.000Z\",\n  \"endDate\": \"2026-02-28T00:00:00.000Z\",\n  \"totalWeeks\": 13\n}"
+            }
+          }
+        },
+        {
+          "name": "Renew Term 1 Enrolments into Term 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Has renewed count', () => pm.expect(r.renewed).to.be.a('number'));",
+                  "console.log(`Renewed: ${r.renewed}, Skipped: ${r.skipped}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term2Id}}/renew",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceTermId\": \"{{termId}}\"\n}",
+              "description": "Copies ACTIVE / FEE_PENDING / DOCUMENTS_PENDING enrolments from Term 1 to Term 2.\nFee recalculated from current baseFeePerWeek × totalWeeks.\nAlready-enrolled participants in Term 2 are skipped."
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "10 — Error Cases",
+      "item": [
+        {
+          "name": "GET /register/:slug — slug not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('404', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/register/non-existent-slug"
+          }
+        },
+        {
+          "name": "Create duplicate Season term",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('409 Conflict', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"termNumber\": 1,\n  \"startDate\": \"2025-09-01T00:00:00.000Z\",\n  \"endDate\": \"2025-11-30T00:00:00.000Z\",\n  \"totalWeeks\": 13\n}"
+            }
+          }
+        },
+        {
+          "name": "Create duplicate Program Rule (overlapping birth years)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('409 Conflict', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/programs/{{programId}}/rules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"U9\",\n  \"ruleType\": \"BIRTH_YEAR_RANGE\",\n  \"minBirthYear\": 2018,\n  \"maxBirthYear\": 2020,\n  \"sessionsPerWeek\": 2,\n  \"capacity\": 10\n}"
+            }
+          }
+        },
+        {
+          "name": "Invalid term status transition (DRAFT → ONGOING, skipping OPEN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{termId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ONGOING\"\n}"
+            }
+          }
+        }
+      ]
+    }
+
+  ]
+}

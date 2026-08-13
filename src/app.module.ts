@@ -40,6 +40,7 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { SeasonsModule } from './modules/seasons/seasons.module.js';
 import { ProgramsModule } from './modules/programs/programs.module.js';
+import { FamiliesModule } from './modules/families/families.module.js';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { ProgramsModule } from './modules/programs/programs.module.js';
     ApiKeysModule,
     SeasonsModule,
     ProgramsModule,
+    FamiliesModule,
   ],
   providers: [
     // Plan J (F-32) — global audit interceptor. Writes one tamper-evident

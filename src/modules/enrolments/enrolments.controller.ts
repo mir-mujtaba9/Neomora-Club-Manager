@@ -1,4 +1,5 @@
 import { Body, Controller, Post, UseGuards, Param, Get, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -9,7 +10,10 @@ import { EnrolmentsService } from './enrolments.service.js';
 import { CreateEnrolmentDto } from './dto/create-enrolment.dto.js';
 import { ReEnrolDto } from './dto/re-enrol.dto.js';
 import { FindEnrolmentsDto } from './dto/find-enrolments.dto.js';
+import { CalculateFeeDto } from './dto/calculate-fee.dto.js';
+import { StaffRegisterDto } from './dto/staff-register.dto.js';
 
+@ApiTags('Enrolments')
 @Controller('enrolments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class EnrolmentsController {
@@ -32,7 +36,6 @@ export class EnrolmentsController {
     @Body() dto: CreateEnrolmentDto,
     @Query('allowOverlap') allowOverlap?: string,
   ) {
-    // Only SUPER_ADMIN and FINANCE_OFFICER may bypass the overlap guard.
     const wantsBypass = allowOverlap === 'true';
     const canBypass =
       user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.FINANCE_OFFICER;
@@ -56,5 +59,41 @@ export class EnrolmentsController {
     return this.enrolmentsService.reEnrol(tenantId, user, id, dto, {
       allowOverlap: wantsBypass && canBypass,
     });
+  }
+
+  // ─── Staff registration form endpoints ───────────────────────────────────
+
+  @Post('calculate-fee')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'Live fee calculation (calculateFee engine)',
+    description:
+      'No side effects — pure calculation. Used by the "Live Fee Summary" panel in the ' +
+      'staff registration form. Call whenever location, program, term, join date, ' +
+      'commitment length, or kit option changes.',
+  })
+  async calculateFee(
+    @TenantId() tenantId: string,
+    @Body() dto: CalculateFeeDto,
+  ) {
+    return this.enrolmentsService.calculateFee(tenantId, dto);
+  }
+
+  @Post('staff-register')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER)
+  @ApiOperation({
+    summary: 'Staff-side "Register Student" form submission',
+    description:
+      'Single endpoint for the admin registration form. Handles: ' +
+      'create or reuse existing participant, create or reuse existing guardian/family, ' +
+      'allocate seat, create invoice, and optionally record payment at registration. ' +
+      'Returns enrolment + invoice + optional payment in one response.',
+  })
+  async staffRegister(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Body() dto: StaffRegisterDto,
+  ) {
+    return this.enrolmentsService.staffRegister(tenantId, user, dto);
   }
 }

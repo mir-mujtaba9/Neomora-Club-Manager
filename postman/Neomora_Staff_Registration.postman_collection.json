@@ -1,0 +1,501 @@
+{
+  "info": {
+    "name": "Neomora — Staff Registration Flow",
+    "description": "Tests the admin 'Register Student' form: family search → fee calculation → staff register.\nRun after setting up a location, season, term, and program (see Full-Flow collection).",
+    "_postman_id": "neomora-staff-reg-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:3000", "type": "string" },
+    { "key": "accessToken",   "value": "",                      "type": "string" },
+    { "key": "locationId",    "value": "",                      "type": "string" },
+    { "key": "sessionId",     "value": "",                      "type": "string" },
+    { "key": "programId",     "value": "",                      "type": "string" },
+    { "key": "participantId", "value": "",                      "type": "string" },
+    { "key": "enrolmentId",   "value": "",                      "type": "string" },
+    { "key": "invoiceId",     "value": "",                      "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "1 — Auth",
+      "item": [
+        {
+          "name": "Login (SUPER_ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('accessToken', r.accessToken ?? r.data?.accessToken ?? '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@example.com\",\n  \"password\": \"your-password-here\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "2 — Family Search (Section 1 of form)",
+      "description": "Powers the 'Search existing family' field. Call as the staff types a guardian name, phone, or email.",
+      "item": [
+        {
+          "name": "Search by guardian phone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns array', () => pm.expect(r).to.be.an('array'));",
+                  "console.log('Families found:', r.length);",
+                  "if (r.length > 0) {",
+                  "  console.log('First family guardian:', r[0].guardian.fullName);",
+                  "  console.log('Participants:', r[0].participants.map(p => p.firstNameEn + ' ' + p.lastNameEn).join(', '));",
+                  "  // Auto-select first participant for downstream tests",
+                  "  if (r[0].participants.length > 0) {",
+                  "    pm.collectionVariables.set('participantId', r[0].participants[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/families/search?q=+971509998877",
+              "query": [{ "key": "q", "value": "+971509998877" }]
+            },
+            "description": "Search by phone number. Returns up to 10 family groups, each with guardian info and their linked participants (students)."
+          }
+        },
+        {
+          "name": "Search by guardian name",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/families/search?q=Mohammed",
+              "query": [{ "key": "q", "value": "Mohammed" }]
+            }
+          }
+        },
+        {
+          "name": "Search by email",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/families/search?q=m.alrashid@example.com",
+              "query": [{ "key": "q", "value": "m.alrashid@example.com" }]
+            }
+          }
+        },
+        {
+          "name": "Search — no results (new family)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Empty array = new family', () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/families/search?q=nobody@nowhere.test",
+              "query": [{ "key": "q", "value": "nobody@nowhere.test" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "3 — Calculate Fee (Live Fee Summary panel)",
+      "description": "No side effects. Call whenever the form values change to update the right-hand fee panel.",
+      "item": [
+        {
+          "name": "Calculate fee — with program (weekly rate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('OK', () => pm.response.to.have.status(201));",
+                  "pm.test('Returns totalFee', () => pm.expect(r.totalFee).to.be.a('string'));",
+                  "pm.test('feeSource is PROGRAM_WEEKLY_RATE', () => pm.expect(r.feeSource).to.eql('PROGRAM_WEEKLY_RATE'));",
+                  "console.log(`Per-term: ${r.perTermFee}, Commitment: ${r.commitmentLength}x, Total: ${r.totalFee}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/calculate-fee",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"programId\": \"{{programId}}\",\n  \"commitmentLength\": 1,\n  \"joinDate\": \"2025-09-01\",\n  \"includeKit\": false\n}"
+            },
+            "description": "Fee = Program.baseFeePerWeek × session.totalWeeks = 50 × 13 = AED 650.\nTotal = 650 × commitmentLength."
+          }
+        },
+        {
+          "name": "Calculate fee — 2-term commitment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('OK', () => pm.response.to.have.status(201));",
+                  "pm.test('Commitment is 2', () => pm.expect(r.commitmentLength).to.eql(2));",
+                  "console.log(`Per-term: ${r.perTermFee}, Total for 2 terms: ${r.totalFee}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/calculate-fee",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"programId\": \"{{programId}}\",\n  \"commitmentLength\": 2,\n  \"joinDate\": \"2025-09-01\",\n  \"includeKit\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Calculate fee — no program (session base fee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('OK', () => pm.response.to.have.status(201));",
+                  "pm.test('feeSource is SESSION_BASE or LOCATION_OVERRIDE', () => {",
+                  "  pm.expect(['SESSION_BASE','LOCATION_OVERRIDE']).to.include(r.feeSource);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/calculate-fee",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"commitmentLength\": 1,\n  \"joinDate\": \"2025-09-01\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "4 — Staff Register (Create Registration & Invoice button)",
+      "description": "Single endpoint that handles the full form submission.",
+      "item": [
+        {
+          "name": "Register NEW student — new family, no payment now",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Enrolled', () => pm.expect(r.outcome).to.eql('ENROLLED'));",
+                  "pm.test('Invoice created', () => pm.expect(r.invoice).to.exist);",
+                  "pm.test('No payment (deferred)', () => pm.expect(r.payment).to.be.undefined);",
+                  "pm.collectionVariables.set('participantId', r.participantId ?? '');",
+                  "pm.collectionVariables.set('enrolmentId',  r.enrolment?.id ?? '');",
+                  "pm.collectionVariables.set('invoiceId',    r.invoice?.id ?? '');",
+                  "console.log('Invoice number:', r.invoice?.invoiceNumber);",
+                  "console.log('Total fee:', r.fee?.totalFee);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Khalid\",\n  \"lastNameEn\": \"Al-Mansouri\",\n  \"dateOfBirth\": \"2018-06-10\",\n  \"gender\": \"MALE\",\n  \"guardianFullName\": \"Ali Al-Mansouri\",\n  \"guardianPhone\": \"+971501234567\",\n  \"guardianEmail\": \"ali.mansouri@example.com\",\n  \"guardianRelationship\": \"Father\",\n  \"primaryLocationId\": \"{{locationId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"programId\": \"{{programId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 1,\n  \"includeKit\": false,\n  \"recordPaymentNow\": false\n}",
+              "description": "Creates: participant + guardian + enrolment + invoice. No payment recorded."
+            }
+          }
+        },
+        {
+          "name": "Register NEW student — pay full invoice at registration (cash)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Enrolled', () => pm.expect(r.outcome).to.eql('ENROLLED'));",
+                  "pm.test('Invoice created', () => pm.expect(r.invoice).to.exist);",
+                  "pm.test('Payment recorded', () => pm.expect(r.payment).to.exist);",
+                  "pm.test('Payment at PENDING_VERIFICATION', () => pm.expect(r.payment.status).to.eql('PENDING_VERIFICATION'));",
+                  "console.log('Payment ID:', r.payment?.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Nour\",\n  \"lastNameEn\": \"Al-Farsi\",\n  \"dateOfBirth\": \"2016-11-22\",\n  \"gender\": \"FEMALE\",\n  \"guardianFullName\": \"Maryam Al-Farsi\",\n  \"guardianPhone\": \"+971507654321\",\n  \"guardianRelationship\": \"Mother\",\n  \"primaryLocationId\": \"{{locationId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"programId\": \"{{programId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 1,\n  \"includeKit\": true,\n  \"recordPaymentNow\": true,\n  \"paymentMethod\": \"CASH\",\n  \"paymentReference\": \"REC-001\"\n}",
+              "description": "Creates participant + guardian + enrolment + invoice + payment (PENDING_VERIFICATION). Finance officer must verify the payment to mark it COMPLETED."
+            }
+          }
+        },
+        {
+          "name": "Register EXISTING student (participantId from family search)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created or Conflict', () => {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  pm.test('Enrolled', () => pm.expect(r.outcome).to.eql('ENROLLED'));",
+                  "  pm.collectionVariables.set('enrolmentId', r.enrolment?.id ?? '');",
+                  "  pm.collectionVariables.set('invoiceId',   r.invoice?.id ?? '');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantId\": \"{{participantId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"programId\": \"{{programId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 1,\n  \"includeKit\": false,\n  \"recordPaymentNow\": false\n}",
+              "description": "Uses participantId from family search. No new participant or guardian is created."
+            }
+          }
+        },
+        {
+          "name": "Register with 3-term commitment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('commitmentLength is 3', () => pm.expect(r.fee.commitmentLength).to.eql(3));",
+                  "console.log('3-term total fee:', r.fee.totalFee);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstNameEn\": \"Saad\",\n  \"lastNameEn\": \"Ibrahim\",\n  \"dateOfBirth\": \"2017-02-14\",\n  \"gender\": \"MALE\",\n  \"guardianFullName\": \"Ibrahim Saad\",\n  \"guardianPhone\": \"+971509871234\",\n  \"guardianRelationship\": \"Father\",\n  \"primaryLocationId\": \"{{locationId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"programId\": \"{{programId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 3,\n  \"includeKit\": true,\n  \"recordPaymentNow\": false\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "5 — Error Cases",
+      "item": [
+        {
+          "name": "Error: new student without required fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Error: recordPaymentNow without paymentMethod",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantId\": \"{{participantId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 1,\n  \"recordPaymentNow\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Error: duplicate registration (same student, same term)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('409 Conflict', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/staff-register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantId\": \"{{participantId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"joinDate\": \"2025-09-01\",\n  \"commitmentLength\": 1,\n  \"recordPaymentNow\": false\n}",
+              "description": "Run this AFTER a successful registration with the same participantId + sessionId."
+            }
+          }
+        },
+        {
+          "name": "Error: calculate-fee with invalid session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/enrolments/calculate-fee",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"sessionId\": \"00000000-0000-0000-0000-000000000000\",\n  \"commitmentLength\": 1,\n  \"joinDate\": \"2025-09-01\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "6 — View Results",
+      "item": [
+        {
+          "name": "View enrolment",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/enrolments?locationId={{locationId}}&page=1&limit=20",
+              "query": [
+                { "key": "locationId", "value": "{{locationId}}" },
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "View invoices for enrolment",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/enrolments/{{enrolmentId}}/invoices"
+          }
+        },
+        {
+          "name": "View participant profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/participants/{{participantId}}"
+          }
+        }
+      ]
+    }
+
+  ]
+}
