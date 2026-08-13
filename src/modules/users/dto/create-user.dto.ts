@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -31,4 +32,10 @@ export class CreateUserDto {
   @ValidateIf((o: CreateUserDto) => o.role === UserRole.LOCATION_MANAGER || o.role === UserRole.STAFF)
   @IsUUID()
   locationId?: string;
+
+  @ValidateIf((o: CreateUserDto) => o.role === UserRole.FINANCE_OFFICER)
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  locationIds?: string[];
 }

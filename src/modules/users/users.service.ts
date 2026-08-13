@@ -17,15 +17,72 @@ import { UpdateUserDto } from './dto/update-user.dto.js';
 export class UsersService {
 	constructor(private readonly prisma: PrismaService) {}
 
-	private async assertValidLocation(tenantId: string, locationId: string) {
-		const location = await this.prisma.location.findFirst({
-			where: { id: locationId, tenantId, deletedAt: null },
-			select: { id: true },
+	private async assertValidLocations(tenantId: string, locationIds: string[]) {
+		if (!locationIds || locationIds.length === 0) return;
+		const count = await this.prisma.location.count({
+			where: { id: { in: locationIds }, tenantId, deletedAt: null },
 		});
 
-		if (!location) {
-			throw new BadRequestException('Invalid locationId for this tenant');
+		if (count !== locationIds.length) {
+			throw new BadRequestException('One or more locationIds are invalid for this tenant');
 		}
+	}
+
+	private formatUser(user: any) {
+		const { userLocations, ...rest } = user;
+		let locations: Array<{ id: string; name: string; city: string; status: string }> = [];
+
+		if (user.role === UserRole.FINANCE_OFFICER) {
+			if (Array.isArray(userLocations)) {
+				locations = userLocations
+					.map((ul: any) => ul.location)
+					.filter(Boolean);
+			}
+		} else if (user.location) {
+			locations = [user.location];
+		}
+
+		return {
+			...rest,
+			name: user.fullName,
+			locations,
+		};
+	}
+
+	private get userSelect() {
+		return {
+			id: true,
+			tenantId: true,
+			email: true,
+			fullName: true,
+			role: true,
+			locationId: true,
+			totpEnabled: true,
+			locked: true,
+			lockedUntil: true,
+			lastLoginAt: true,
+			createdAt: true,
+			location: {
+				select: {
+					id: true,
+					name: true,
+					city: true,
+					status: true,
+				},
+			},
+			userLocations: {
+				select: {
+					location: {
+						select: {
+							id: true,
+							name: true,
+							city: true,
+							status: true,
+						},
+					},
+				},
+			},
+		};
 	}
 
 	async create(tenantId: string, dto: CreateUserDto) {
@@ -44,11 +101,19 @@ export class UsersService {
 		}
 
 		let locationId: string | null = dto.locationId ?? null;
+		let assignedLocationIds: string[] = [];
+
 		if (dto.role === UserRole.LOCATION_MANAGER || dto.role === UserRole.STAFF) {
 			if (!locationId) {
 				throw new BadRequestException(`locationId is required for ${dto.role}`);
 			}
-			await this.assertValidLocation(tenantId, locationId);
+			await this.assertValidLocations(tenantId, [locationId]);
+		} else if (dto.role === UserRole.FINANCE_OFFICER) {
+			locationId = null;
+			if (dto.locationIds && dto.locationIds.length > 0) {
+				assignedLocationIds = dto.locationIds;
+				await this.assertValidLocations(tenantId, assignedLocationIds);
+			}
 		} else {
 			locationId = null;
 		}
@@ -63,22 +128,21 @@ export class UsersService {
 				passwordHash,
 				role: dto.role,
 				locationId,
+				...(assignedLocationIds.length > 0 && {
+					userLocations: {
+						createMany: {
+							data: assignedLocationIds.map((locId) => ({
+								tenantId,
+								locationId: locId,
+							})),
+						},
+					},
+				}),
 			},
-			select: {
-				id: true,
-				tenantId: true,
-				email: true,
-				fullName: true,
-				role: true,
-				locationId: true,
-				createdAt: true,
-			},
+			select: this.userSelect,
 		});
 
-		return {
-			...user,
-			name: user.fullName,
-		};
+		return this.formatUser(user);
 	}
 
 	async findAll(tenantId: string, query: FindUsersDto) {
@@ -91,7 +155,12 @@ export class UsersService {
 		};
 
 		if (role) where.role = role;
-		if (locationId) where.locationId = locationId;
+		if (locationId) {
+			where.OR = [
+				{ locationId },
+				{ userLocations: { some: { locationId } } },
+			];
+		}
 
 		const [items, total] = await Promise.all([
 			this.prisma.user.findMany({
@@ -99,33 +168,13 @@ export class UsersService {
 				skip,
 				take: limit,
 				orderBy: { createdAt: 'desc' },
-				select: {
-					id: true,
-					tenantId: true,
-					email: true,
-					fullName: true,
-					role: true,
-					locationId: true,
-					totpEnabled: true,
-					locked: true,
-					lockedUntil: true,
-					lastLoginAt: true,
-					createdAt: true,
-					location: {
-						select: {
-							id: true,
-							name: true,
-							city: true,
-							status: true,
-						},
-					},
-				},
+				select: this.userSelect,
 			}),
 			this.prisma.user.count({ where }),
 		]);
 
 		return {
-			items: items.map((u) => ({ ...u, name: u.fullName })),
+			items: items.map((u) => this.formatUser(u)),
 			meta: {
 				total,
 				page,
@@ -142,42 +191,19 @@ export class UsersService {
 				tenantId,
 				deletedAt: null,
 			},
-			select: {
-				id: true,
-				tenantId: true,
-				email: true,
-				fullName: true,
-				role: true,
-				locationId: true,
-				totpEnabled: true,
-				locked: true,
-				lockedUntil: true,
-				lastLoginAt: true,
-				createdAt: true,
-				location: {
-					select: {
-						id: true,
-						name: true,
-						city: true,
-						status: true,
-					},
-				},
-			},
+			select: this.userSelect,
 		});
 
 		if (!user) {
 			throw new NotFoundException('User not found');
 		}
 
-		return {
-			...user,
-			name: user.fullName,
-		};
+		return this.formatUser(user);
 	}
 
 	async update(tenantId: string, id: string, dto: UpdateUserDto) {
-		if (!dto.role && !dto.locationId) {
-			throw new BadRequestException('At least one of role or locationId must be provided');
+		if (!dto.role && !dto.locationId && dto.locationIds === undefined) {
+			throw new BadRequestException('At least one of role, locationId, or locationIds must be provided');
 		}
 
 		const existing = await this.prisma.user.findFirst({
@@ -195,24 +221,47 @@ export class UsersService {
 
 		const nextRole = dto.role ?? (existing.role as unknown as UserRole);
 		let nextLocationId: string | null = existing.locationId;
+		let shouldUpdateUserLocations = false;
+		let newLocationIds: string[] = [];
 
-		if (dto.role) {
-			if (nextRole === UserRole.LOCATION_MANAGER || nextRole === UserRole.STAFF) {
-				nextLocationId = dto.locationId ?? existing.locationId;
-				if (!nextLocationId) {
-					throw new BadRequestException(`locationId is required for ${nextRole}`);
+		if (nextRole === UserRole.LOCATION_MANAGER || nextRole === UserRole.STAFF) {
+			if (dto.locationId !== undefined) {
+				nextLocationId = dto.locationId;
+			}
+			if (!nextLocationId) {
+				throw new BadRequestException(`locationId is required for ${nextRole}`);
+			}
+			await this.assertValidLocations(tenantId, [nextLocationId]);
+			shouldUpdateUserLocations = true;
+			newLocationIds = [];
+		} else if (nextRole === UserRole.FINANCE_OFFICER) {
+			nextLocationId = null;
+			if (dto.locationIds !== undefined) {
+				if (dto.locationIds.length > 0) {
+					await this.assertValidLocations(tenantId, dto.locationIds);
 				}
+				shouldUpdateUserLocations = true;
+				newLocationIds = dto.locationIds;
+			}
+		} else {
+			nextLocationId = null;
+			shouldUpdateUserLocations = true;
+			newLocationIds = [];
+		}
 
-				await this.assertValidLocation(tenantId, nextLocationId);
-			} else {
-				nextLocationId = null;
+		if (shouldUpdateUserLocations) {
+			await this.prisma.userLocation.deleteMany({
+				where: { userId: existing.id, tenantId },
+			});
+			if (newLocationIds.length > 0) {
+				await this.prisma.userLocation.createMany({
+					data: newLocationIds.map((locId) => ({
+						tenantId,
+						userId: existing.id,
+						locationId: locId,
+					})),
+				});
 			}
-		} else if (dto.locationId) {
-			if ((existing.role as unknown as UserRole) !== UserRole.LOCATION_MANAGER && (existing.role as unknown as UserRole) !== UserRole.STAFF) {
-				throw new BadRequestException('locationId can only be updated for LOCATION_MANAGER or STAFF');
-			}
-			await this.assertValidLocation(tenantId, dto.locationId);
-			nextLocationId = dto.locationId;
 		}
 
 		const updated = await this.prisma.user.update({
@@ -221,33 +270,10 @@ export class UsersService {
 				role: nextRole,
 				locationId: nextLocationId,
 			},
-			select: {
-				id: true,
-				tenantId: true,
-				email: true,
-				fullName: true,
-				role: true,
-				locationId: true,
-				totpEnabled: true,
-				locked: true,
-				lockedUntil: true,
-				lastLoginAt: true,
-				createdAt: true,
-				location: {
-					select: {
-						id: true,
-						name: true,
-						city: true,
-						status: true,
-					},
-				},
-			},
+			select: this.userSelect,
 		});
 
-		return {
-			...updated,
-			name: updated.fullName,
-		};
+		return this.formatUser(updated);
 	}
 
 	async softDelete(tenantId: string, id: string) {
