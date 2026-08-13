@@ -47,6 +47,9 @@ model Tenant {
   webhookEvents               WebhookEvent[]
   webhookSubscriptions        WebhookSubscription[]
   userLocations               UserLocation[]
+  seasons                     Season[]
+  programs                    Program[]
+  programRules                ProgramRule[]
 
   @@map("tenants")
 }
@@ -74,6 +77,7 @@ model Location {
   users             User[]
   waitlist          Waitlist[]
   userLocations     UserLocation[]
+  programs          Program[]
 
   @@index([tenantId, status])
   @@map("locations")
@@ -196,15 +200,20 @@ model Session {
   enrolCloseAt      DateTime?          @map("enrol_close_at")
   deletedAt         DateTime?          @map("deleted_at")
   createdAt         DateTime           @default(now()) @map("created_at")
+  seasonId          String?            @map("season_id")
+  termNumber        Int?               @map("term_number")
+  totalWeeks        Int?               @map("total_weeks")
   attendanceRecords AttendanceRecord[]
   broadcastMessages BroadcastMessage[] @relation("FilterSession")
   enrolments        Enrolment[]
   paymentPlans      PaymentPlan[]
   sessionLocations  SessionLocation[]
   tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  season            Season?            @relation(fields: [seasonId], references: [id])
   waitlist          Waitlist[]
 
   @@index([tenantId, status])
+  @@index([tenantId, seasonId])
   @@map("sessions")
 }
 
@@ -309,12 +318,17 @@ model Enrolment {
   deletedAt        DateTime?       @map("deleted_at")
   createdAt        DateTime        @default(now()) @map("created_at")
   feeOverride      Decimal?        @map("fee_override") @db.Decimal(10, 2)
+  programId        String?         @map("program_id")
+  joinDate         DateTime?       @map("join_date") @db.Date
+  commitmentLength Int?            @map("commitment_length")
+  includeKit       Boolean?        @default(false) @map("include_kit")
   location         Location        @relation(fields: [locationId], references: [id])
   participant      Participant     @relation(fields: [participantId], references: [id])
   reEnrolledFrom   Enrolment?      @relation("ReEnrolment", fields: [reEnrolledFromId], references: [id])
   reEnrolments     Enrolment[]     @relation("ReEnrolment")
   session          Session         @relation(fields: [sessionId], references: [id])
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  program          Program?        @relation(fields: [programId], references: [id])
   invoices         Invoice[]
   notifications    Notification[]
   payments         Payment[]
@@ -691,6 +705,7 @@ enum ParticipantStatus {
 enum SessionStatus {
   DRAFT
   OPEN
+  ONGOING
   CLOSED
   ARCHIVED
 }
@@ -817,4 +832,72 @@ enum SubscriptionStatus {
   SUSPENDED
   EXPIRED
   CANCELLED
+}
+
+// ─── Seasons & Terms ──────────────────────────────────────────────────────────
+
+model Season {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  name      String
+  startDate DateTime     @map("start_date") @db.Date
+  endDate   DateTime     @map("end_date") @db.Date
+  status    SeasonStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at")
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  sessions  Session[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, status])
+  @@map("seasons")
+}
+
+// ─── Programs ────────────────────────────────────────────────────────────────
+
+model Program {
+  id              String        @id @default(uuid())
+  tenantId        String        @map("tenant_id")
+  code            String
+  name            String
+  locationId      String?       @map("location_id")
+  baseFeePerWeek  Decimal?      @map("base_fee_per_week") @db.Decimal(10, 2)
+  deletedAt       DateTime?     @map("deleted_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  location        Location?     @relation(fields: [locationId], references: [id])
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  rules           ProgramRule[]
+  enrolments      Enrolment[]
+
+  @@unique([tenantId, code], map: "programs_tenant_code_active_key", where: raw("(deleted_at IS NULL)"))
+  @@index([tenantId])
+  @@map("programs")
+}
+
+model ProgramRule {
+  id              String          @id @default(uuid())
+  tenantId        String          @map("tenant_id")
+  programId       String          @map("program_id")
+  label           String
+  ruleType        ProgramRuleType @default(BIRTH_YEAR_RANGE) @map("rule_type")
+  minBirthYear    Int             @map("min_birth_year")
+  maxBirthYear    Int             @map("max_birth_year")
+  sessionsPerWeek Int             @map("sessions_per_week")
+  capacity        Int
+  deletedAt       DateTime?       @map("deleted_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  program         Program         @relation(fields: [programId], references: [id])
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@index([programId])
+  @@index([tenantId])
+  @@map("program_rules")
+}
+
+enum SeasonStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ProgramRuleType {
+  BIRTH_YEAR_RANGE
 }

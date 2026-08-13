@@ -1,0 +1,867 @@
+{
+  "info": {
+    "name": "Neomora Club Manager — Seasons & Programs",
+    "_postman_id": "neomora-seasons-programs-v2",
+    "description": "Complete API collection for the Seasons, Terms, Programs, and Renewal flow.\n\n**How to use:**\n1. Set `baseUrl` and credentials in the collection **Variables** tab.\n2. Run **Auth → Login** first — the access token is saved automatically.\n3. Work through the folders in order; each create request saves its ID into a variable so subsequent requests wire up automatically.\n\n**Base URL:** `http://localhost:3000/api/v1`\n**Auth:** Bearer JWT in Authorization header — stored automatically by Login.\n**Roles:** Every endpoint requires `SUPER_ADMIN` role.\n\n**Typical happy-path order:**\n1. Login → 2. Create Season → 3. Create Term 1 → 4. Create Term 2 → 5. Create Program → 6. Add Rules → 7. Advance Term Status → 8. Renew Term",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string",
+      "description": "Change for staging/prod (e.g. https://api.yourdomain.com/v1)"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically by the Login request"
+    },
+    {
+      "key": "seasonId",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically by Create Season"
+    },
+    {
+      "key": "term1Id",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically by Create Term 1 (source for renewal)"
+    },
+    {
+      "key": "term2Id",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically by Create Term 2 (renewal target)"
+    },
+    {
+      "key": "programId",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically by Create Program"
+    },
+    {
+      "key": "ruleId",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically by Add Program Rule"
+    },
+    {
+      "key": "loginEmail",
+      "value": "superadmin@neomora.com",
+      "type": "string",
+      "description": "SUPER_ADMIN account email"
+    },
+    {
+      "key": "loginPassword",
+      "value": "YourPasswordHere",
+      "type": "string",
+      "description": "SUPER_ADMIN account password"
+    },
+    {
+      "key": "locationId",
+      "value": "",
+      "type": "string",
+      "description": "REQUIRED — fill with an existing location ID from your tenant before running Term/Program requests"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1 — Auth",
+      "description": "Authenticate and get the Bearer token. Run Login first before any other request.",
+      "item": [
+        {
+          "name": "Login (SUPER_ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', res.accessToken);",
+                  "    pm.test('Login successful — token saved', () => pm.response.to.have.status(200));",
+                  "} else {",
+                  "    pm.test('Login failed — check credentials in Variables tab', () => { throw new Error(JSON.stringify(res)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Logs in a SUPER_ADMIN user. Saves `accessToken` automatically."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 — Seasons",
+      "description": "A Season is the academy's operating year (e.g. '2025-26'). It groups Terms but has no dates of its own — dates live on each Term.\n\n**Status:** `ACTIVE → ARCHIVED`",
+      "item": [
+        {
+          "name": "Create Season",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('seasonId', res.id);",
+                  "    pm.test('Season created — seasonId saved', () => pm.response.to.have.status(201));",
+                  "} else {",
+                  "    pm.test('Create Season failed', () => { throw new Error(JSON.stringify(res)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"2025-26\",\n  \"startDate\": \"2025-08-31\",\n  \"endDate\": \"2026-06-30\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/seasons", "host": ["{{baseUrl}}"], "path": ["seasons"] },
+            "description": "Creates a season. `name` must be unique per tenant. Saves `seasonId`."
+          }
+        },
+        {
+          "name": "List Seasons",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/seasons?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "ACTIVE", "disabled": true, "description": "ACTIVE | ARCHIVED" }
+              ]
+            },
+            "description": "Paginated list. Each item includes `termCount`."
+          }
+        },
+        {
+          "name": "Get Season (with Terms + enrolment counts)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}"]
+            },
+            "description": "Returns the season with all non-deleted terms. Each term includes `activeEnrolmentCount` (ACTIVE + FEE_PENDING + DOCUMENTS_PENDING enrolments) — useful to decide which term to use as renewal source."
+          }
+        },
+        {
+          "name": "Update Season — Rename",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"2025-26 (Revised)\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Season — Archive",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ARCHIVED\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 — Terms",
+      "description": "A Term is a specific period of enrolment at a specific branch, within a season. Two branches can be in the same season and have different Term 1 dates.\n\n**Status flow (one direction only):** `DRAFT → OPEN → ONGOING → CLOSED`\n\n**Important:** Fill the `locationId` collection variable before creating terms.",
+      "item": [
+        {
+          "name": "Create Term 1 (source for renewal later)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('term1Id', res.id);",
+                  "    pm.test('Term 1 created — term1Id saved', () => pm.response.to.have.status(201));",
+                  "} else {",
+                  "    pm.test('Create Term 1 failed', () => { throw new Error(JSON.stringify(res)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"termNumber\": 1,\n  \"startDate\": \"2025-09-01\",\n  \"endDate\": \"2025-12-15\",\n  \"totalWeeks\": 15\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms"]
+            },
+            "description": "Creates Term 1 in the season at the given location. Name is auto-generated as `{Season name} - Term 1`. `baseFee` defaults to 0 — actual fee comes from `Program.baseFeePerWeek × totalWeeks` at enrolment time. Saves `term1Id`."
+          }
+        },
+        {
+          "name": "Create Term 2 (renewal target)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('term2Id', res.id);",
+                  "    pm.test('Term 2 created — term2Id saved', () => pm.response.to.have.status(201));",
+                  "} else {",
+                  "    pm.test('Create Term 2 failed', () => { throw new Error(JSON.stringify(res)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"termNumber\": 2,\n  \"startDate\": \"2026-01-05\",\n  \"endDate\": \"2026-04-10\",\n  \"totalWeeks\": 14\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms"]
+            },
+            "description": "Creates Term 2. This will be the renewal target. Saves `term2Id`."
+          }
+        },
+        {
+          "name": "Update Term — Change Dates & Weeks",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2025-09-08\",\n  \"endDate\": \"2025-12-19\",\n  \"totalWeeks\": 15\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term1Id}}"]
+            }
+          }
+        },
+        {
+          "name": "Advance Term 1 — DRAFT → OPEN",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"OPEN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term1Id}}"]
+            },
+            "description": "Opens Term 1 for enrolments."
+          }
+        },
+        {
+          "name": "Advance Term 1 — OPEN → ONGOING",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ONGOING\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term1Id}}"]
+            }
+          }
+        },
+        {
+          "name": "Advance Term 1 — ONGOING → CLOSED",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CLOSED\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term1Id}}"]
+            },
+            "description": "Terminal state for a term. After this, run the Renew endpoint to carry enrolments into Term 2."
+          }
+        },
+        {
+          "name": "Delete Term (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term1Id}}"]
+            },
+            "description": "Soft-deletes the term. Returns 204 No Content."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 — Term Renewal",
+      "description": "Bulk-carry enrolments from a previous term into a new one. The doc explicitly calls this 'the natural next feature to prioritise'.\n\n**What it does:**\n- Finds all ACTIVE / FEE_PENDING / DOCUMENTS_PENDING enrolments in the source term\n- Creates new enrolments in the target term, each starting at `FEE_PENDING`\n- Fee is recalculated as `Program.baseFeePerWeek × targetTerm.totalWeeks` if the programme has a weekly rate; otherwise copies the previous fee\n- Participants already in the target term are silently skipped\n- The entire batch is wrapped in a DB transaction (all-or-nothing)\n- Each new enrolment links back to the original via `reEnrolledFromId` for audit trail\n\n**Target term must be DRAFT or OPEN.**",
+      "item": [
+        {
+          "name": "Renew Term 1 → Term 2",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceTermId\": \"{{term1Id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term2Id}}/renew",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term2Id}}", "renew"]
+            },
+            "description": "Copies all renewable enrolments from Term 1 (`sourceTermId`) into Term 2 (`:termId` in the URL).\n\n**Response includes:**\n- `renewed` — count of new enrolments created\n- `skipped` — count of participants already in the target term\n- `message` — human-readable summary\n- `enrolments` — array of the newly created enrolment stubs (id, participantId, status, totalFee, programId, reEnrolledFromId)\n\n**Fee logic:** If `Program.baseFeePerWeek` is set and `targetTerm.totalWeeks` is known, fee = `baseFeePerWeek × totalWeeks`. Otherwise the previous term's fee is carried forward."
+          }
+        },
+        {
+          "name": "Renew — Source same as target (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceTermId\": \"{{term2Id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term2Id}}/renew",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term2Id}}", "renew"]
+            },
+            "description": "**Expected: HTTP 400** — source and target term are the same."
+          }
+        },
+        {
+          "name": "Renew — Target term CLOSED (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceTermId\": \"{{term2Id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term1Id}}/renew",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term1Id}}", "renew"]
+            },
+            "description": "**Expected: HTTP 400** — target term is CLOSED (or ONGOING), not DRAFT/OPEN."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 — Programs",
+      "description": "Programs are reusable course templates (e.g. 'Academy Sessions', 'Junior Squad'). One programme definition is used across all branches — `locationId` is nullable (null = available everywhere).\n\n**`baseFeePerWeek`:** Set the programme's weekly fee. Enrolment fee = `baseFeePerWeek × term.totalWeeks`. Leave null until client confirms rate card.",
+      "item": [
+        {
+          "name": "Create Program — Global (no location)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('programId', res.id);",
+                  "    pm.test('Program created — programId saved', () => pm.response.to.have.status(201));",
+                  "} else {",
+                  "    pm.test('Create Program failed', () => { throw new Error(JSON.stringify(res)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SWIM-JR\",\n  \"name\": \"Junior Swimming\",\n  \"baseFeePerWeek\": 150.00\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/programs", "host": ["{{baseUrl}}"], "path": ["programs"] },
+            "description": "Creates a global programme (no `locationId`) with a weekly fee of 150.00. Saves `programId`.\n\n**Fee example:** A 15-week term costs 150 × 15 = SAR 2,250 per participant."
+          }
+        },
+        {
+          "name": "Create Program — Location-scoped",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SWIM-SR\",\n  \"name\": \"Senior Swimming\",\n  \"locationId\": \"{{locationId}}\",\n  \"baseFeePerWeek\": 175.00\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/programs", "host": ["{{baseUrl}}"], "path": ["programs"] }
+          }
+        },
+        {
+          "name": "Create Program — No weekly fee (pending rate card)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ACAD-SESS\",\n  \"name\": \"Academy Sessions\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/programs", "host": ["{{baseUrl}}"], "path": ["programs"] },
+            "description": "`baseFeePerWeek` omitted — fee will be set once the client confirms the rate card."
+          }
+        },
+        {
+          "name": "List Programs (all)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/programs?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "locationId", "value": "{{locationId}}", "disabled": true, "description": "Filter by location UUID" },
+                { "key": "locationId", "value": "none", "disabled": true, "description": "Show only global programs" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Programs — Global only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/programs?locationId=none",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs"],
+              "query": [{ "key": "locationId", "value": "none" }]
+            }
+          }
+        },
+        {
+          "name": "Get Program (with Rules)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}"]
+            },
+            "description": "Returns the programme with all active rules (ordered by minBirthYear asc). Rules include `label` (e.g. 'U8') for display."
+          }
+        },
+        {
+          "name": "Update Program — Set Fee Rate",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseFeePerWeek\": 160.00\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}"]
+            },
+            "description": "Update only the weekly fee. All other fields are unchanged."
+          }
+        },
+        {
+          "name": "Update Program — Clear Fee Rate",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseFeePerWeek\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Program — Assign to Location",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Program — Make Global (clear location)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Program (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}"]
+            },
+            "description": "Soft-deletes. Returns 204. The code can be reused after deletion."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 — Program Rules (Cohorts)",
+      "description": "Eligibility rules define age groups (cohorts) within a programme. Each rule has:\n- **`label`** — human-readable cohort name shown in the UI and invoices (e.g. 'U8', 'U10', 'Junior Squad')\n- **`minBirthYear` / `maxBirthYear`** — inclusive birth year eligibility range\n- **`sessionsPerWeek`** — how many times this group trains per week\n- **`capacity`** — max enrolments for this cohort\n\n**Overlap guard:** Adding a rule whose birth year range overlaps any existing active rule is rejected with HTTP 409.",
+      "item": [
+        {
+          "name": "Add Rule — U8 (born 2017–2020)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('ruleId', res.id);",
+                  "    pm.test('Rule created — ruleId saved', () => pm.response.to.have.status(201));",
+                  "} else {",
+                  "    pm.test('Add Rule failed', () => { throw new Error(JSON.stringify(res)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"U8\",\n  \"ruleType\": \"BIRTH_YEAR_RANGE\",\n  \"minBirthYear\": 2017,\n  \"maxBirthYear\": 2020,\n  \"sessionsPerWeek\": 2,\n  \"capacity\": 20\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}", "rules"]
+            },
+            "description": "U8 group: children born 2017–2020 (under 8 as of ~2025). 2 sessions/week, 20 places. Saves `ruleId`."
+          }
+        },
+        {
+          "name": "Add Rule — U10 (born 2015–2016)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"U10\",\n  \"ruleType\": \"BIRTH_YEAR_RANGE\",\n  \"minBirthYear\": 2015,\n  \"maxBirthYear\": 2016,\n  \"sessionsPerWeek\": 2,\n  \"capacity\": 18\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}", "rules"]
+            }
+          }
+        },
+        {
+          "name": "Add Rule — Junior Squad (born 2012–2014)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Junior Squad\",\n  \"ruleType\": \"BIRTH_YEAR_RANGE\",\n  \"minBirthYear\": 2012,\n  \"maxBirthYear\": 2014,\n  \"sessionsPerWeek\": 3,\n  \"capacity\": 16\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}", "rules"]
+            },
+            "description": "Junior Squad: 3x/week, 16 places. Range 2012–2014 does not overlap with U10 (2015–2016) or U8 (2017–2020)."
+          }
+        },
+        {
+          "name": "Add Rule — Overlapping range (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Overlap Test\",\n  \"minBirthYear\": 2013,\n  \"maxBirthYear\": 2018,\n  \"sessionsPerWeek\": 2,\n  \"capacity\": 10\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}", "rules"]
+            },
+            "description": "**Expected: HTTP 409** — range 2013–2018 overlaps Junior Squad (2012–2014), U10 (2015–2016), and U8 (2017–2020). The error message names the first conflicting rule's label."
+          }
+        },
+        {
+          "name": "Remove Rule (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}/rules/{{ruleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}", "rules", "{{ruleId}}"]
+            },
+            "description": "Soft-deletes the rule. Returns 204. After deletion a new rule with the same birth year range can be added."
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 — Error Cases (Reference)",
+      "description": "Intentionally broken requests. Use these to confirm error handling works before sharing with frontend.",
+      "item": [
+        {
+          "name": "Create Season — Missing endDate (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Incomplete\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/seasons", "host": ["{{baseUrl}}"], "path": ["seasons"] },
+            "description": "**Expected: HTTP 400** — `startDate` and `endDate` required."
+          }
+        },
+        {
+          "name": "Create Season — Duplicate name (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"2025-26\",\n  \"startDate\": \"2025-08-31\",\n  \"endDate\": \"2026-06-30\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/seasons", "host": ["{{baseUrl}}"], "path": ["seasons"] },
+            "description": "**Expected: HTTP 409** — season '2025-26' already exists."
+          }
+        },
+        {
+          "name": "Add Rule — Missing label (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minBirthYear\": 2010,\n  \"maxBirthYear\": 2011,\n  \"sessionsPerWeek\": 2,\n  \"capacity\": 10\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/programs/{{programId}}/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["programs", "{{programId}}", "rules"]
+            },
+            "description": "**Expected: HTTP 400** — `label` is now required."
+          }
+        },
+        {
+          "name": "Invalid status transition — DRAFT → CLOSED (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CLOSED\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/seasons/{{seasonId}}/terms/{{term2Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "{{seasonId}}", "terms", "{{term2Id}}"]
+            },
+            "description": "**Expected: HTTP 400** — Term 2 is DRAFT; cannot jump to CLOSED. Must go DRAFT→OPEN first."
+          }
+        },
+        {
+          "name": "Create Program — Duplicate code (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SWIM-JR\",\n  \"name\": \"Another Junior Swimming\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/programs", "host": ["{{baseUrl}}"], "path": ["programs"] },
+            "description": "**Expected: HTTP 409** — SWIM-JR already exists."
+          }
+        },
+        {
+          "name": "Get non-existent season (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/seasons/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["seasons", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "**Expected: HTTP 404**"
+          }
+        },
+        {
+          "name": "No Bearer token (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/seasons", "host": ["{{baseUrl}}"], "path": ["seasons"] },
+            "description": "**Expected: HTTP 401**"
+          }
+        }
+      ]
+    }
+  ]
+}

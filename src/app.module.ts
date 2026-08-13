@@ -38,6 +38,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { FeesModule } from './modules/fees/fees.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
+import { SeasonsModule } from './modules/seasons/seasons.module.js';
+import { ProgramsModule } from './modules/programs/programs.module.js';
 
 @Module({
   imports: [
@@ -98,6 +100,8 @@ import { AttendanceModule } from './modules/attendance/attendance.module.js';
     // SUPER_ADMIN role required. The matching `JwtOrApiKeyGuard` lives
     // in common/ so partner controllers can use it without importing.
     ApiKeysModule,
+    SeasonsModule,
+    ProgramsModule,
   ],
   providers: [
     // Plan J (F-32) — global audit interceptor. Writes one tamper-evident
