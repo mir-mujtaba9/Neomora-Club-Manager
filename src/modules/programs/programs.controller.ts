@@ -22,6 +22,7 @@ import { CreateProgramDto } from './dto/create-program.dto.js';
 import { UpdateProgramDto } from './dto/update-program.dto.js';
 import { FindProgramsDto } from './dto/find-programs.dto.js';
 import { CreateProgramRuleDto } from './dto/create-program-rule.dto.js';
+import { CreateProgramWithRuleDto } from './dto/create-program-with-rule.dto.js';
 
 @ApiTags('Programs')
 @ApiBearerAuth('access-token')
@@ -35,6 +36,12 @@ export class ProgramsController {
   @ApiOperation({ summary: 'Create a program' })
   create(@TenantId() tenantId: string, @Body() dto: CreateProgramDto) {
     return this.programsService.createProgram(tenantId, dto);
+  }
+
+  @Post('with-rule')
+  @ApiOperation({ summary: 'Create a program together with its primary eligibility rule in one call' })
+  createWithRule(@TenantId() tenantId: string, @Body() dto: CreateProgramWithRuleDto) {
+    return this.programsService.createProgramWithRule(tenantId, dto);
   }
 
   @Get()

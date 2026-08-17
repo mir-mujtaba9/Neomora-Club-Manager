@@ -10,6 +10,7 @@ import { CreateProgramDto } from './dto/create-program.dto.js';
 import { UpdateProgramDto } from './dto/update-program.dto.js';
 import { FindProgramsDto } from './dto/find-programs.dto.js';
 import { CreateProgramRuleDto } from './dto/create-program-rule.dto.js';
+import { CreateProgramWithRuleDto } from './dto/create-program-with-rule.dto.js';
 
 @Injectable()
 export class ProgramsService {
@@ -43,6 +44,58 @@ export class ProgramsService {
         location: { select: { id: true, name: true, city: true } },
         rules: { where: { deletedAt: null }, orderBy: { minBirthYear: 'asc' } },
       },
+    });
+  }
+
+  async createProgramWithRule(tenantId: string, dto: CreateProgramWithRuleDto) {
+    if (dto.locationId) {
+      await this.assertValidLocation(tenantId, dto.locationId);
+    }
+
+    const existing = await this.prisma.program.findFirst({
+      where: { tenantId, code: dto.code, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException(`Program with code "${dto.code}" already exists`);
+    }
+
+    if (dto.rule.minBirthYear > dto.rule.maxBirthYear) {
+      throw new BadRequestException('minBirthYear must be <= maxBirthYear');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const program = await tx.program.create({
+        data: {
+          tenantId,
+          code: dto.code,
+          name: dto.name,
+          locationId: dto.locationId ?? null,
+          baseFeePerWeek:
+            dto.baseFeePerWeek != null ? new Prisma.Decimal(dto.baseFeePerWeek) : null,
+        },
+      });
+
+      await tx.programRule.create({
+        data: {
+          tenantId,
+          programId: program.id,
+          label: dto.rule.label,
+          ruleType: (dto.rule.ruleType ?? 'BIRTH_YEAR_RANGE') as any,
+          minBirthYear: dto.rule.minBirthYear,
+          maxBirthYear: dto.rule.maxBirthYear,
+          sessionsPerWeek: dto.rule.sessionsPerWeek,
+          capacity: dto.rule.capacity,
+        },
+      });
+
+      return tx.program.findUniqueOrThrow({
+        where: { id: program.id },
+        include: {
+          location: { select: { id: true, name: true, city: true } },
+          rules: { where: { deletedAt: null }, orderBy: { minBirthYear: 'asc' } },
+        },
+      });
     });
   }
 
