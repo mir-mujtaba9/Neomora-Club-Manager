@@ -1,3 +1,4 @@
 export enum ProgramRuleType {
   BIRTH_YEAR_RANGE = 'BIRTH_YEAR_RANGE',
+  EXACT_BIRTH_YEAR = 'EXACT_BIRTH_YEAR',
 }

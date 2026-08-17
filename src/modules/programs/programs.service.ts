@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/database/prisma.service.js';
+import { ProgramRuleType } from '../../common/constants/program-rule-type.constants.js';
 import { CreateProgramDto } from './dto/create-program.dto.js';
 import { UpdateProgramDto } from './dto/update-program.dto.js';
 import { FindProgramsDto } from './dto/find-programs.dto.js';
@@ -60,9 +61,7 @@ export class ProgramsService {
       throw new ConflictException(`Program with code "${dto.code}" already exists`);
     }
 
-    if (dto.rule.minBirthYear > dto.rule.maxBirthYear) {
-      throw new BadRequestException('minBirthYear must be <= maxBirthYear');
-    }
+    const { minBirthYear, maxBirthYear } = this.resolveBirthYearRange(dto.rule);
 
     return this.prisma.$transaction(async (tx) => {
       const program = await tx.program.create({
@@ -81,9 +80,9 @@ export class ProgramsService {
           tenantId,
           programId: program.id,
           label: dto.rule.label,
-          ruleType: (dto.rule.ruleType ?? 'BIRTH_YEAR_RANGE') as any,
-          minBirthYear: dto.rule.minBirthYear,
-          maxBirthYear: dto.rule.maxBirthYear,
+          ruleType: (dto.rule.ruleType ?? ProgramRuleType.BIRTH_YEAR_RANGE) as any,
+          minBirthYear,
+          maxBirthYear,
           sessionsPerWeek: dto.rule.sessionsPerWeek,
           capacity: dto.rule.capacity,
         },
@@ -195,22 +194,20 @@ export class ProgramsService {
   async addRule(tenantId: string, programId: string, dto: CreateProgramRuleDto) {
     await this.assertProgramExists(tenantId, programId);
 
-    if (dto.minBirthYear > dto.maxBirthYear) {
-      throw new BadRequestException('minBirthYear must be <= maxBirthYear');
-    }
+    const { minBirthYear, maxBirthYear } = this.resolveBirthYearRange(dto);
 
     const overlapping = await this.prisma.programRule.findFirst({
       where: {
         programId,
         deletedAt: null,
-        minBirthYear: { lte: dto.maxBirthYear },
-        maxBirthYear: { gte: dto.minBirthYear },
+        minBirthYear: { lte: maxBirthYear },
+        maxBirthYear: { gte: minBirthYear },
       },
       select: { id: true, label: true, minBirthYear: true, maxBirthYear: true },
     });
     if (overlapping) {
       throw new ConflictException(
-        `Birth year range ${dto.minBirthYear}–${dto.maxBirthYear} overlaps with existing rule "${overlapping.label}" (${overlapping.minBirthYear}–${overlapping.maxBirthYear})`,
+        `Birth year range ${minBirthYear}–${maxBirthYear} overlaps with existing rule "${overlapping.label}" (${overlapping.minBirthYear}–${overlapping.maxBirthYear})`,
       );
     }
 
@@ -219,9 +216,9 @@ export class ProgramsService {
         tenantId,
         programId,
         label: dto.label,
-        ruleType: (dto.ruleType ?? 'BIRTH_YEAR_RANGE') as any,
-        minBirthYear: dto.minBirthYear,
-        maxBirthYear: dto.maxBirthYear,
+        ruleType: (dto.ruleType ?? ProgramRuleType.BIRTH_YEAR_RANGE) as any,
+        minBirthYear,
+        maxBirthYear,
         sessionsPerWeek: dto.sessionsPerWeek,
         capacity: dto.capacity,
       },
@@ -260,5 +257,27 @@ export class ProgramsService {
     if (!location) {
       throw new BadRequestException('Invalid locationId for this tenant');
     }
+  }
+
+  /** Resolves min/max birth years for storage — EXACT_BIRTH_YEAR collapses to a single-year range. */
+  private resolveBirthYearRange(
+    rule: Pick<CreateProgramRuleDto, 'ruleType' | 'minBirthYear' | 'maxBirthYear' | 'exactYear'>,
+  ): { minBirthYear: number; maxBirthYear: number } {
+    if (rule.ruleType === ProgramRuleType.EXACT_BIRTH_YEAR) {
+      if (rule.exactYear == null) {
+        throw new BadRequestException('exactYear is required when ruleType is EXACT_BIRTH_YEAR');
+      }
+      return { minBirthYear: rule.exactYear, maxBirthYear: rule.exactYear };
+    }
+
+    if (rule.minBirthYear == null || rule.maxBirthYear == null) {
+      throw new BadRequestException(
+        'minBirthYear and maxBirthYear are required when ruleType is BIRTH_YEAR_RANGE',
+      );
+    }
+    if (rule.minBirthYear > rule.maxBirthYear) {
+      throw new BadRequestException('minBirthYear must be <= maxBirthYear');
+    }
+    return { minBirthYear: rule.minBirthYear, maxBirthYear: rule.maxBirthYear };
   }
 }

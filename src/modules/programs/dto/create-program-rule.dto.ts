@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ProgramRuleType } from '../../../common/constants/program-rule-type.constants.js';
 
@@ -14,19 +14,38 @@ export class CreateProgramRuleDto {
   @IsOptional()
   ruleType?: ProgramRuleType = ProgramRuleType.BIRTH_YEAR_RANGE;
 
-  @ApiProperty({ example: 2015, description: 'Minimum birth year (inclusive)' })
+  @ApiPropertyOptional({
+    example: 2015,
+    description: 'Minimum birth year (inclusive). Required when ruleType is BIRTH_YEAR_RANGE.',
+  })
+  @ValidateIf((o) => o.ruleType !== ProgramRuleType.EXACT_BIRTH_YEAR)
   @Type(() => Number)
   @IsInt()
   @Min(1950)
   @Max(2100)
-  minBirthYear!: number;
+  minBirthYear?: number;
 
-  @ApiProperty({ example: 2020, description: 'Maximum birth year (inclusive)' })
+  @ApiPropertyOptional({
+    example: 2020,
+    description: 'Maximum birth year (inclusive). Required when ruleType is BIRTH_YEAR_RANGE.',
+  })
+  @ValidateIf((o) => o.ruleType !== ProgramRuleType.EXACT_BIRTH_YEAR)
   @Type(() => Number)
   @IsInt()
   @Min(1950)
   @Max(2100)
-  maxBirthYear!: number;
+  maxBirthYear?: number;
+
+  @ApiPropertyOptional({
+    example: 2018,
+    description: 'Exact birth year. Required when ruleType is EXACT_BIRTH_YEAR.',
+  })
+  @ValidateIf((o) => o.ruleType === ProgramRuleType.EXACT_BIRTH_YEAR)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1950)
+  @Max(2100)
+  exactYear?: number;
 
   @ApiProperty({ example: 2 })
   @Type(() => Number)
