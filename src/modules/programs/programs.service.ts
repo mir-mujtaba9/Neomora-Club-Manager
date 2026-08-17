@@ -30,7 +30,7 @@ export class ProgramsService {
       throw new ConflictException(`Program with code "${dto.code}" already exists`);
     }
 
-    return this.prisma.program.create({
+    const program = await this.prisma.program.create({
       data: {
         tenantId,
         code: dto.code,
@@ -46,6 +46,8 @@ export class ProgramsService {
         rules: { where: { deletedAt: null }, orderBy: { minBirthYear: 'asc' } },
       },
     });
+
+    return this.mapProgram(program);
   }
 
   async createProgramWithRule(tenantId: string, dto: CreateProgramWithRuleDto) {
@@ -88,13 +90,15 @@ export class ProgramsService {
         },
       });
 
-      return tx.program.findUniqueOrThrow({
+      const created = await tx.program.findUniqueOrThrow({
         where: { id: program.id },
         include: {
           location: { select: { id: true, name: true, city: true } },
           rules: { where: { deletedAt: null }, orderBy: { minBirthYear: 'asc' } },
         },
       });
+
+      return this.mapProgram(created);
     });
   }
 
@@ -144,7 +148,7 @@ export class ProgramsService {
 
     if (!program) throw new NotFoundException('Program not found');
 
-    return program;
+    return this.mapProgram(program);
   }
 
   async updateProgram(tenantId: string, id: string, dto: UpdateProgramDto) {
@@ -173,7 +177,7 @@ export class ProgramsService {
         dto.baseFeePerWeek != null ? new Prisma.Decimal(dto.baseFeePerWeek) : null;
     }
 
-    return this.prisma.program.update({
+    const program = await this.prisma.program.update({
       where: { id },
       data,
       include: {
@@ -181,6 +185,8 @@ export class ProgramsService {
         rules: { where: { deletedAt: null }, orderBy: { minBirthYear: 'asc' } },
       },
     });
+
+    return this.mapProgram(program);
   }
 
   async softDeleteProgram(tenantId: string, id: string) {
@@ -211,7 +217,7 @@ export class ProgramsService {
       );
     }
 
-    return this.prisma.programRule.create({
+    const rule = await this.prisma.programRule.create({
       data: {
         tenantId,
         programId,
@@ -223,6 +229,8 @@ export class ProgramsService {
         capacity: dto.capacity,
       },
     });
+
+    return this.mapRule(rule);
   }
 
   async removeRule(tenantId: string, programId: string, ruleId: string) {
@@ -279,5 +287,28 @@ export class ProgramsService {
       throw new BadRequestException('minBirthYear must be <= maxBirthYear');
     }
     return { minBirthYear: rule.minBirthYear, maxBirthYear: rule.maxBirthYear };
+  }
+
+  /** Shapes a program rule for API responses — exposes exactYear for EXACT_BIRTH_YEAR rules and nulls out the unused min/max or exact fields. */
+  private mapRule<T extends { ruleType: ProgramRuleType | string; minBirthYear: number; maxBirthYear: number }>(
+    rule: T,
+  ): Omit<T, 'minBirthYear' | 'maxBirthYear'> & {
+    minBirthYear: number | null;
+    maxBirthYear: number | null;
+    exactYear: number | null;
+  } {
+    const isExact = rule.ruleType === ProgramRuleType.EXACT_BIRTH_YEAR;
+    return {
+      ...rule,
+      minBirthYear: isExact ? null : rule.minBirthYear,
+      maxBirthYear: isExact ? null : rule.maxBirthYear,
+      exactYear: isExact ? rule.minBirthYear : null,
+    };
+  }
+
+  private mapProgram<T extends { rules: Array<{ ruleType: ProgramRuleType | string; minBirthYear: number; maxBirthYear: number }> }>(
+    program: T,
+  ) {
+    return { ...program, rules: program.rules.map((rule) => this.mapRule(rule)) };
   }
 }
