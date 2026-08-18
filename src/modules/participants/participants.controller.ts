@@ -101,6 +101,26 @@ export class ParticipantsController {
 		return res.json(result);
 	}
 
+	@Get('staff-registered')
+	@Roles(UserRole.SUPER_ADMIN)
+	@ApiBearerAuth('access-token')
+	@ApiOperation({
+		summary: 'List participants registered via staff-register (SUPER_ADMIN only)',
+		description:
+			'Returns participants whose record was created through the staff "Register Student" form ' +
+			'(POST /enrolments/staff-register), as opposed to public self-registration. ' +
+			'Supports the same pagination/search/sort filters as GET /participants.',
+	})
+	@ApiResponse({ status: 200, description: 'Paginated staff-registered participants.' })
+	@ApiResponse({ status: 403, description: 'Only SUPER_ADMIN may access this endpoint.' })
+	async findStaffRegistered(
+		@TenantId() tenantId: string,
+		@CurrentUser() user: any,
+		@Query() query: FindParticipantsDto,
+	) {
+		return this.participantsService.findStaffRegistered(tenantId, user, query);
+	}
+
 	@Get(':id')
 	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
 	@ApiScopes('participants:read')

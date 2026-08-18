@@ -555,6 +555,7 @@ export class EnrolmentsService {
               gender:      dto.gender!,
               status:      'INQUIRY' as any,
               phone:       dto.guardianPhone!,
+              registrationSource: 'STAFF_REGISTERED' as any,
             },
           });
 

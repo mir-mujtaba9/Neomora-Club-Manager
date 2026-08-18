@@ -144,7 +144,12 @@ export class ParticipantsService {
 		return result;
 	}
 
-	async findAll(tenantId: string, user: any, query: FindParticipantsDto) {
+	async findAll(
+		tenantId: string,
+		user: any,
+		query: FindParticipantsDto,
+		extraWhere: Record<string, any> = {},
+	) {
 		const {
 			status,
 			locationId,
@@ -228,6 +233,8 @@ export class ParticipantsService {
 			where.locationId = user.locationId;
 		}
 
+		Object.assign(where, extraWhere);
+
 		const [items, total] = await Promise.all([
 			this.prisma.participant.findMany({
 				where,
@@ -243,6 +250,15 @@ export class ParticipantsService {
 		]);
 
 		return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+	}
+
+	/**
+	 * Admin-only view of participants whose record originated from the staff
+	 * "Register Student" form (POST /enrolments/staff-register), as opposed
+	 * to public self-registration. Reuses `findAll`'s filtering/pagination.
+	 */
+	async findStaffRegistered(tenantId: string, user: any, query: FindParticipantsDto) {
+		return this.findAll(tenantId, user, query, { registrationSource: 'STAFF_REGISTERED' });
 	}
 
 	async findById(tenantId: string, user: any, id: string) {
