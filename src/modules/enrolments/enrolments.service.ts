@@ -1,11 +1,11 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../../infra/database/prisma.service.js';
 import { EnrolmentAllocatorService } from './enrolment-allocator.service.js';
 import { CreateEnrolmentDto } from './dto/create-enrolment.dto.js';
@@ -13,6 +13,7 @@ import { ReEnrolDto } from './dto/re-enrol.dto.js';
 import { FindEnrolmentsDto } from './dto/find-enrolments.dto.js';
 import { CalculateFeeDto } from './dto/calculate-fee.dto.js';
 import { StaffRegisterDto } from './dto/staff-register.dto.js';
+import { GetAvailableTermsDto } from './dto/get-available-terms.dto.js';
 import { UserRole } from '../../common/constants/user-role.constants.js';
 import { PaymentPlanType } from '../../common/constants/payment-plan-type.constants.js';
 import { nextTenantSequence } from '../../common/utils/tenant-sequence.util.js';
@@ -25,7 +26,7 @@ export class EnrolmentsService {
     private readonly allocator: EnrolmentAllocatorService,
   ) {}
 
-  // ─── Overlap guard ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Overlap guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async assertNoOverlap(
     tenantId: string,
@@ -64,7 +65,7 @@ export class EnrolmentsService {
     }
   }
 
-  // ─── Enrol ────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Enrol â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async enrol(
     tenantId: string,
@@ -160,7 +161,7 @@ export class EnrolmentsService {
     return result;
   }
 
-  // ─── Re-enrol ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Re-enrol â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async reEnrol(
     tenantId: string,
@@ -242,7 +243,7 @@ export class EnrolmentsService {
     return result;
   }
 
-  // ─── Find all ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Find all â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async findAll(tenantId: string, user: any, query: FindEnrolmentsDto) {
     const { sessionId, locationId, status, page = 1, limit = 20 } = query;
@@ -281,19 +282,19 @@ export class EnrolmentsService {
     };
   }
 
-  // ─── Calculate fee (live preview for staff form) ──────────────────────────
+  // â”€â”€â”€ Calculate fee (live preview for staff form) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Pure fee calculation — no side effects.
+   * Pure fee calculation â€” no side effects.
    * The right-hand "Live Fee Summary" panel calls this as the user fills in
    * location / program / term / join date / commitment length.
    *
    * Fee precedence (per term):
-   *   1. Program.baseFeePerWeek × session.totalWeeks  (when programId is set)
+   *   1. Program.baseFeePerWeek Ã— session.totalWeeks  (when programId is set)
    *   2. SessionLocation.feeOverride
    *   3. Session.baseFee
    *
-   * Total = per-term fee × commitmentLength.
+   * Total = per-term fee Ã— commitmentLength.
    * Kit fee is flagged but not yet priced (no rate-card model exists yet).
    */
   async calculateFee(tenantId: string, dto: CalculateFeeDto) {
@@ -355,39 +356,90 @@ export class EnrolmentsService {
         termsCommitted:   commitmentLength,
         kitFee:           '0.00',
         total:            totalFee.toFixed(2),
-        note:             'Kit fee not yet priced — will be added when rate card is configured.',
+        note:             'Kit fee not yet priced â€” will be added when rate card is configured.',
       },
     };
   }
 
-  // ─── Staff register ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Available terms for staff registration form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Single-endpoint staff registration — wraps the entire "Register Student"
+   * Returns terms offered at the given location that are still open for enrolment.
+   * A term is considered available when:
+   *   - Its endDate has not yet passed.
+   *   - Its status is neither CLOSED nor ARCHIVED.
+   *   - It is linked to the location via session_locations.
+   */
+  async getAvailableTerms(tenantId: string, dto: GetAvailableTermsDto) {
+    const location = await this.prisma.location.findFirst({
+      where: { id: dto.locationId, tenantId, deletedAt: null },
+      select: { id: true, name: true, capacity: true },
+    });
+    if (!location) throw new NotFoundException('Location not found');
+
+    const now = new Date();
+
+    const terms = await this.prisma.session.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        endDate: { gte: now },
+        status: { notIn: [SessionStatus.CLOSED, SessionStatus.ARCHIVED] },
+        sessionLocations: { some: { locationId: dto.locationId } },
+      },
+      orderBy: [{ seasonId: 'asc' }, { termNumber: 'asc' }, { startDate: 'asc' }],
+      include: {
+        sessionLocations: {
+          where: { locationId: dto.locationId },
+          select: { feeOverride: true },
+        },
+        season: { select: { id: true, name: true } },
+      },
+    });
+
+    return terms.map((t) => ({
+      id:           t.id,
+      name:         t.name,
+      startDate:    t.startDate,
+      endDate:      t.endDate,
+      status:       t.status,
+      termNumber:   t.termNumber,
+      totalWeeks:   t.totalWeeks,
+      baseFee:      t.baseFee,
+      feeOverride:  t.sessionLocations[0]?.feeOverride ?? null,
+      season:       t.season,
+    }));
+  }
+
+  // â”€â”€â”€ Staff register â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /**
+   * Single-endpoint staff registration â€” wraps the entire "Register Student"
    * form submission shown in the admin UI:
    *
    *   1. Resolve or create participant (student).
    *   2. Resolve or create guardian (family).
-   *   3. Allocate a seat via the allocator (enrolment or waitlist).
-   *   4. Stamp joinDate, commitmentLength, includeKit on the enrolment.
-   *   5. Create an invoice for the total fee.
-   *   6. Optionally record a payment (goes to PENDING_VERIFICATION for finance sign-off).
+   *   3. For each selected term:
+   *      a. Validate the term is open and offered at the location.
+   *      b. Allocate a seat via the allocator (enrolment or waitlist).
+   *      c. If enrolled: stamp joinDate, create invoice, optionally record payment.
+   *   4. Return per-term outcomes. Waitlisted terms include position + message.
    */
   async staffRegister(tenantId: string, user: any, dto: StaffRegisterDto) {
-    // ── Validation ────────────────────────────────────────────────────────
+    // â”€â”€ Cross-field validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const isNewStudent = !dto.participantId;
     if (isNewStudent) {
-      const missingFields: string[] = [];
-      if (!dto.firstNameEn) missingFields.push('firstNameEn');
-      if (!dto.lastNameEn)  missingFields.push('lastNameEn');
-      if (!dto.dateOfBirth) missingFields.push('dateOfBirth');
-      if (!dto.gender)      missingFields.push('gender');
-      if (!dto.guardianFullName) missingFields.push('guardianFullName');
-      if (!dto.guardianPhone)    missingFields.push('guardianPhone');
-      if (!dto.guardianRelationship) missingFields.push('guardianRelationship');
-      if (missingFields.length) {
+      const missing: string[] = [];
+      if (!dto.firstNameEn)         missing.push('firstNameEn');
+      if (!dto.lastNameEn)          missing.push('lastNameEn');
+      if (!dto.dateOfBirth)         missing.push('dateOfBirth');
+      if (!dto.gender)              missing.push('gender');
+      if (!dto.guardianFullName)    missing.push('guardianFullName');
+      if (!dto.guardianPhone)       missing.push('guardianPhone');
+      if (!dto.guardianRelationship) missing.push('guardianRelationship');
+      if (missing.length) {
         throw new BadRequestException(
-          `When creating a new student, these fields are required: ${missingFields.join(', ')}`,
+          `When creating a new student, these fields are required: ${missing.join(', ')}`,
         );
       }
     }
@@ -396,32 +448,17 @@ export class EnrolmentsService {
       throw new BadRequestException('paymentMethod is required when recordPaymentNow is true');
     }
 
-    // ── Pre-fetch session + location (outside tx for early 404s) ──────────
-    const session = await this.prisma.session.findFirst({
-      where: { id: dto.sessionId, tenantId, deletedAt: null },
-      include: {
-        sessionLocations: {
-          where: { locationId: dto.locationId },
-          select: { feeOverride: true },
-        },
-      },
-    });
-    if (!session) throw new NotFoundException('Session not found');
-    if (!session.sessionLocations?.length) {
-      throw new BadRequestException('Session is not offered at the specified location');
-    }
-
+    // â”€â”€ Pre-fetch location (early 404) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const location = await this.prisma.location.findFirst({
       where: { id: dto.locationId, tenantId, deletedAt: null },
     });
     if (!location) throw new NotFoundException('Location not found');
 
-    // ── Location-manager scope guard ──────────────────────────────────────
     if (user?.role === UserRole.LOCATION_MANAGER && user.locationId !== dto.locationId) {
       throw new ForbiddenException('Location managers can only register students at their assigned location');
     }
 
-    // ── Validate program ──────────────────────────────────────────────────
+    // â”€â”€ Validate program once â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let programBaseFeePerWeek: Prisma.Decimal | null = null;
     if (dto.programId) {
       const program = await this.prisma.program.findFirst({
@@ -432,23 +469,55 @@ export class EnrolmentsService {
       programBaseFeePerWeek = program.baseFeePerWeek as Prisma.Decimal | null;
     }
 
-    // ── Pre-compute fee (mirrors calculateFee logic) ──────────────────────
-    let perTermFee: Prisma.Decimal;
-    if (programBaseFeePerWeek && session.totalWeeks) {
-      perTermFee = programBaseFeePerWeek.mul(session.totalWeeks);
-    } else {
-      perTermFee = (session.sessionLocations[0]?.feeOverride ?? session.baseFee) as Prisma.Decimal;
-    }
-    const commitmentLength = dto.commitmentLength ?? 1;
-    const totalFee = perTermFee.mul(commitmentLength);
+    // â”€â”€ Validate every term and pre-compute per-term fees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Done outside the transaction for early, clean 400/404 responses.
+    const now = new Date();
 
-    // ── Transaction ───────────────────────────────────────────────────────
-    const result = await this.prisma.$transaction(
+    type TermContext = { session: any; perTermFee: Prisma.Decimal };
+    const termContexts = new Map<string, TermContext>();
+
+    for (const termId of dto.termIds) {
+      const session = await this.prisma.session.findFirst({
+        where: { id: termId, tenantId, deletedAt: null },
+        include: {
+          sessionLocations: {
+            where: { locationId: dto.locationId },
+            select: { feeOverride: true },
+          },
+        },
+      });
+      if (!session) throw new NotFoundException(`Term ${termId} not found`);
+
+      if (!session.sessionLocations?.length) {
+        throw new BadRequestException(`Term "${session.name}" is not offered at the specified location`);
+      }
+      if (session.endDate < now) {
+        throw new BadRequestException(`Term "${session.name}" has already ended and cannot accept new enrolments`);
+      }
+      if (
+        session.status === SessionStatus.CLOSED ||
+        session.status === SessionStatus.ARCHIVED
+      ) {
+        throw new BadRequestException(`Term "${session.name}" is closed and cannot accept new enrolments`);
+      }
+
+      let perTermFee: Prisma.Decimal;
+      if (programBaseFeePerWeek && session.totalWeeks) {
+        perTermFee = programBaseFeePerWeek.mul(session.totalWeeks);
+      } else {
+        perTermFee = (session.sessionLocations[0]?.feeOverride ?? session.baseFee) as Prisma.Decimal;
+      }
+
+      termContexts.set(termId, { session, perTermFee });
+    }
+
+    // â”€â”€ Transaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const txResult = await this.prisma.$transaction(
       async (tx) => {
+        // Step 1 â€” resolve or create participant (once for all terms)
         let participantId: string;
 
         if (dto.participantId) {
-          // Use existing participant — just verify it belongs to this tenant
           const existing = await tx.participant.findFirst({
             where: { id: dto.participantId, tenantId, deletedAt: null },
             select: { id: true, locationId: true },
@@ -459,14 +528,11 @@ export class EnrolmentsService {
             user?.role === UserRole.LOCATION_MANAGER &&
             existing.locationId !== user.locationId
           ) {
-            throw new ForbiddenException(
-              'Location managers can only register participants from their location',
-            );
+            throw new ForbiddenException('Location managers can only register participants from their location');
           }
 
           participantId = existing.id;
         } else {
-          // Create new participant
           const homeLocationId = dto.primaryLocationId ?? dto.locationId;
 
           const homeLocation = await tx.location.findFirst({
@@ -477,7 +543,6 @@ export class EnrolmentsService {
 
           const seq      = await nextTenantSequence(tx, tenantId, 'participant');
           const uniqueId = generateUniqueId('P', seq);
-          const dob      = new Date(dto.dateOfBirth!);
 
           const participant = await tx.participant.create({
             data: {
@@ -486,7 +551,7 @@ export class EnrolmentsService {
               uniqueId,
               firstNameEn: dto.firstNameEn!,
               lastNameEn:  dto.lastNameEn!,
-              dateOfBirth: dob,
+              dateOfBirth: new Date(dto.dateOfBirth!),
               gender:      dto.gender!,
               status:      'INQUIRY' as any,
               phone:       dto.guardianPhone!,
@@ -507,116 +572,135 @@ export class EnrolmentsService {
           participantId = participant.id;
         }
 
-        // Duplicate-enrolment guard
-        const alreadyEnrolled = await tx.enrolment.findFirst({
-          where: {
+        // Step 2 â€” allocate each term in sequence
+        const joinDate = dto.joinDate ? new Date(dto.joinDate) : null;
+
+        type TermResult = {
+          termId:          string;
+          termName:        string;
+          outcome:         'ENROLLED' | 'WAITLISTED';
+          enrolment?:      any;
+          invoice?:        any;
+          payment?:        any;
+          waitlist?:       any;
+          waitlistPosition?: number;
+          message?:        string;
+        };
+
+        const termResults: TermResult[] = [];
+
+        for (const [termId, { session, perTermFee }] of termContexts) {
+          const alreadyEnrolled = await tx.enrolment.findFirst({
+            where: {
+              tenantId,
+              participantId,
+              sessionId:  termId,
+              locationId: dto.locationId,
+              deletedAt:  null,
+            },
+            select: { id: true },
+          });
+          if (alreadyEnrolled) {
+            throw new ConflictException(
+              `Participant is already enrolled in term "${session.name}" at this location`,
+            );
+          }
+
+          const allocation = await this.allocator.allocate(tx, {
             tenantId,
             participantId,
-            sessionId: dto.sessionId,
-            locationId: dto.locationId,
-            deletedAt: null,
-          },
-          select: { id: true },
-        });
-        if (alreadyEnrolled) {
-          throw new ConflictException(
-            'This participant is already enrolled in this term at this location',
-          );
-        }
-
-        // Allocate seat
-        const allocation = await this.allocator.allocate(tx, {
-          tenantId,
-          participantId,
-          sessionId:       dto.sessionId,
-          locationId:      dto.locationId,
-          paymentPlanType: PaymentPlanType.FULL,
-          programId:       dto.programId,
-        });
-
-        let enrolment: any   = null;
-        let waitlistEntry: any = null;
-
-        if (allocation.outcome === 'ENROLLED') {
-          enrolment = allocation.enrolment;
-
-          // Stamp the extra registration fields onto the enrolment
-          const joinDate = dto.joinDate ? new Date(dto.joinDate) : null;
-          enrolment = await tx.enrolment.update({
-            where: { id: enrolment.id },
-            data: {
-              joinDate:         joinDate,
-              commitmentLength: commitmentLength,
-              includeKit:       dto.includeKit ?? false,
-              // Overwrite the fee with the commitment-adjusted total
-              totalFee:  totalFee,
-              balance:   totalFee,
-            },
+            sessionId:       termId,
+            locationId:      dto.locationId,
+            paymentPlanType: PaymentPlanType.FULL,
+            programId:       dto.programId,
           });
-        } else {
-          waitlistEntry = allocation.waitlist;
+
+          if (allocation.outcome === 'ENROLLED') {
+            let enrolment = allocation.enrolment!;
+
+            enrolment = await tx.enrolment.update({
+              where: { id: enrolment.id },
+              data: {
+                joinDate,
+                commitmentLength: 1, // each term is an independent commitment
+                includeKit:       dto.includeKit ?? false,
+                totalFee:         perTermFee,
+                balance:          perTermFee,
+              },
+            });
+
+            const invSeq        = await nextTenantSequence(tx, tenantId, 'invoice');
+            const invoiceNumber = `INV-${new Date().getFullYear()}-${invSeq.toString().padStart(6, '0')}`;
+            const dueDate       = new Date();
+            dueDate.setDate(dueDate.getDate() + 14);
+
+            const invoice = await tx.invoice.create({
+              data: {
+                tenantId,
+                enrolmentId:     enrolment.id,
+                invoiceNumber,
+                amount:          perTermFee,
+                dueDate,
+                status:          'PENDING' as any,
+                paymentPlanType: 'FULL' as any,
+              },
+            });
+
+            let payment: any = null;
+            if (dto.recordPaymentNow) {
+              payment = await tx.payment.create({
+                data: {
+                  tenantId,
+                  enrolmentId:    enrolment.id,
+                  invoiceId:      invoice.id,
+                  recordedById:   user?.id ?? user?.sub,
+                  gateway:        'OFFLINE' as any,
+                  method:         dto.paymentMethod as any,
+                  amount:         perTermFee,
+                  status:         'PENDING_VERIFICATION' as any,
+                  idempotencyKey: `staff-reg-${enrolment.id}-${Date.now()}`,
+                  ...(dto.paymentReference ? { gatewayRef: dto.paymentReference } : {}),
+                },
+              });
+            }
+
+            termResults.push({ termId, termName: session.name, outcome: 'ENROLLED', enrolment, invoice, payment });
+          } else {
+            const waitlist = allocation.waitlist!;
+            termResults.push({
+              termId,
+              termName:        session.name,
+              outcome:         'WAITLISTED',
+              waitlist,
+              waitlistPosition: waitlist.position,
+              message:
+                `The program capacity for "${session.name}" has been reached. ` +
+                `The participant has been added to the waitlist at position ${waitlist.position}.`,
+            });
+          }
         }
 
-        // Create invoice (only for enrolled, not waitlisted)
-        let invoice: any = null;
-        if (enrolment) {
-          const invSeq    = await nextTenantSequence(tx, tenantId, 'invoice');
-          const year      = new Date().getFullYear();
-          const invoiceNumber = `INV-${year}-${invSeq.toString().padStart(6, '0')}`;
-          const dueDate   = new Date();
-          dueDate.setDate(dueDate.getDate() + 14); // 14-day payment window
-
-          invoice = await tx.invoice.create({
-            data: {
-              tenantId,
-              enrolmentId:    enrolment.id,
-              invoiceNumber,
-              amount:         totalFee,
-              dueDate,
-              status:         'PENDING' as any,
-              paymentPlanType: 'FULL' as any,
-            },
-          });
-        }
-
-        // Optionally record payment at registration
-        let payment: any = null;
-        if (dto.recordPaymentNow && enrolment && invoice) {
-          const idempotencyKey = `staff-reg-${enrolment.id}-${Date.now()}`;
-          payment = await tx.payment.create({
-            data: {
-              tenantId,
-              enrolmentId:    enrolment.id,
-              invoiceId:      invoice.id,
-              recordedById:   user?.id ?? user?.sub,
-              gateway:        'OFFLINE' as any,
-              method:         dto.paymentMethod as any,
-              amount:         totalFee,
-              status:         'PENDING_VERIFICATION' as any,
-              idempotencyKey,
-              ...(dto.paymentReference ? { gatewayRef: dto.paymentReference } : {}),
-            },
-          });
-        }
-
-        return { participantId, enrolment, waitlist: waitlistEntry, invoice, payment };
+        return { participantId, termResults };
       },
       { timeout: 60000, maxWait: 60000 },
     );
 
+    const enrolled   = txResult.termResults.filter((r) => r.outcome === 'ENROLLED');
+    const waitlisted = txResult.termResults.filter((r) => r.outcome === 'WAITLISTED');
+
     return {
-      success:   true,
-      outcome:   result.enrolment ? 'ENROLLED' : 'WAITLISTED',
-      participantId: result.participantId,
-      ...(result.enrolment    && { enrolment:  result.enrolment }),
-      ...(result.waitlist     && { waitlist:   result.waitlist }),
-      ...(result.invoice      && { invoice:    result.invoice }),
-      ...(result.payment      && { payment:    result.payment }),
-      fee: {
-        perTermFee:       perTermFee.toFixed(2),
-        totalFee:         totalFee.toFixed(2),
-        commitmentLength,
+      success: true,
+      participantId: txResult.participantId,
+      summary: {
+        enrolled:   enrolled.length,
+        waitlisted: waitlisted.length,
+        ...(waitlisted.length > 0 && {
+          waitlistMessage:
+            'One or more terms have reached capacity. ' +
+            'The participant has been added to the respective waitlist(s) and will be notified when a seat becomes available.',
+        }),
       },
+      results: txResult.termResults,
     };
   }
 }

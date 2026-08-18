@@ -1,18 +1,17 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsEmail,
   IsEnum,
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
-  Max,
-  Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import { Gender } from '@prisma/client';
 
 /**
@@ -100,22 +99,22 @@ export class StaffRegisterDto {
   @IsOptional()
   programId?: string;
 
-  @ApiProperty({ description: 'Term (Session) ID' })
-  @IsUUID()
-  @IsNotEmpty()
-  sessionId!: string;
+  @ApiProperty({
+    description:
+      'One or more term (Session) IDs to enrol in. Every term must be active ' +
+      '(not closed or expired) and offered at the specified location.',
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @IsUUID('all', { each: true })
+  termIds!: string[];
 
   @ApiProperty({ description: 'Date the student starts (ISO 8601)' })
   @IsDateString()
   @IsNotEmpty()
   joinDate!: string;
-
-  @ApiProperty({ description: 'Number of consecutive terms committed to (1–3)', minimum: 1, maximum: 3, default: 1 })
-  @IsInt()
-  @Min(1)
-  @Max(3)
-  @Type(() => Number)
-  commitmentLength: number = 1;
 
   @ApiPropertyOptional({ description: 'Include academy kit fee' })
   @IsBoolean()

@@ -12,6 +12,7 @@ import { ReEnrolDto } from './dto/re-enrol.dto.js';
 import { FindEnrolmentsDto } from './dto/find-enrolments.dto.js';
 import { CalculateFeeDto } from './dto/calculate-fee.dto.js';
 import { StaffRegisterDto } from './dto/staff-register.dto.js';
+import { GetAvailableTermsDto } from './dto/get-available-terms.dto.js';
 
 @ApiTags('Enrolments')
 @Controller('enrolments')
@@ -62,6 +63,22 @@ export class EnrolmentsController {
   }
 
   // ─── Staff registration form endpoints ───────────────────────────────────
+
+  @Get('available-terms')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'List terms available for staff registration',
+    description:
+      'Returns terms offered at the given location that are still open for enrolment ' +
+      '(endDate has not passed, status is not CLOSED or ARCHIVED). ' +
+      'Used to populate the term picker in the staff registration form.',
+  })
+  async getAvailableTerms(
+    @TenantId() tenantId: string,
+    @Query() query: GetAvailableTermsDto,
+  ) {
+    return this.enrolmentsService.getAvailableTerms(tenantId, query);
+  }
 
   @Post('calculate-fee')
   @Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
