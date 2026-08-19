@@ -254,11 +254,170 @@ export class ParticipantsService {
 
 	/**
 	 * Admin-only view of participants whose record originated from the staff
-	 * "Register Student" form (POST /enrolments/staff-register), as opposed
-	 * to public self-registration. Reuses `findAll`'s filtering/pagination.
+	 * "Register Student" form (POST /enrolments/staff-register).
+	 *
+	 * Returns a rich paginated payload matching the UI table columns:
+	 *   STUDENT | GUARDIAN | PROGRAM | BRANCH | TERMS | TOTAL | PAID | BALANCE | STATUS
 	 */
 	async findStaffRegistered(tenantId: string, user: any, query: FindParticipantsDto) {
-		return this.findAll(tenantId, user, query, { registrationSource: 'STAFF_REGISTERED' });
+		const {
+			locationId,
+			search,
+			page = 1,
+			limit = 20,
+			sortBy = 'createdAt',
+			order = 'desc',
+		} = query;
+
+		const skip = (page - 1) * limit;
+
+		const where: any = {
+			tenantId,
+			deletedAt: null,
+			registrationSource: 'STAFF_REGISTERED',
+		};
+
+		if (locationId) where.locationId = locationId;
+
+		if (search) {
+			where.OR = [
+				{ firstNameEn: { contains: search, mode: 'insensitive' } },
+				{ lastNameEn: { contains: search, mode: 'insensitive' } },
+				{ uniqueId: { contains: search, mode: 'insensitive' } },
+				{ phone: { contains: search, mode: 'insensitive' } },
+				{
+					guardians: {
+						some: {
+							deletedAt: null,
+							OR: [
+								{ fullName: { contains: search, mode: 'insensitive' } },
+								{ phone: { contains: search, mode: 'insensitive' } },
+							],
+						},
+					},
+				},
+			];
+		}
+
+		// LOCATION_MANAGER is scoped to their own location
+		if (user?.role === UserRole.LOCATION_MANAGER && user.locationId) {
+			where.locationId = user.locationId;
+		}
+
+		const [participants, total] = await Promise.all([
+			this.prisma.participant.findMany({
+				where,
+				skip,
+				take: limit,
+				orderBy: { [sortBy]: order },
+				include: {
+					// Branch
+					location: { select: { id: true, name: true, city: true } },
+					// Guardian (primary = oldest)
+					guardians: {
+						where: { deletedAt: null },
+						orderBy: { createdAt: 'asc' },
+						select: { id: true, fullName: true, relationship: true, phone: true, email: true },
+					},
+					// Enrolments with program, session, location, invoices for TERMS/finance columns
+					enrolments: {
+						where: { deletedAt: null },
+						orderBy: { enrolledAt: 'desc' },
+						include: {
+							program: { select: { id: true, name: true } },
+							session: { select: { id: true, name: true, termNumber: true } },
+							location: { select: { id: true, name: true } },
+							invoices: {
+								where: { deletedAt: null },
+								orderBy: { instalmentNo: 'asc' },
+								select: {
+									id: true,
+									instalmentNo: true,
+									instalmentTotal: true,
+									amount: true,
+									status: true,
+									dueDate: true,
+								},
+							},
+						},
+					},
+				},
+			}),
+			this.prisma.participant.count({ where }),
+		]);
+
+		// Shape each participant into the UI-column format
+		const items = participants.map((p: any) => {
+			const primaryGuardian = p.guardians?.[0] ?? null;
+
+			// Aggregate across all active enrolments
+			const enrolmentRows = (p.enrolments ?? []).map((e: any) => {
+				const totalFee = Number(e.totalFee ?? 0);
+				const paidAmount = Number(e.paidAmount ?? 0);
+				const balance = Number(e.balance ?? 0);
+
+				// Build term badges from invoices (T1, T2, T3 …)
+				const terms = (e.invoices ?? []).map((inv: any) => ({
+					label: inv.instalmentNo != null ? `T${inv.instalmentNo}` : 'T1',
+					instalmentNo: inv.instalmentNo,
+					amount: Number(inv.amount),
+					status: inv.status,
+					dueDate: inv.dueDate,
+				}));
+
+				// Payment status: PAID when balance ≤ 0, else UNPAID
+				const paymentStatus = balance <= 0 ? 'PAID' : 'UNPAID';
+
+				return {
+					enrolmentId: e.id,
+					status: e.status,
+					program: e.program ? { id: e.program.id, name: e.program.name } : null,
+					session: e.session
+						? { id: e.session.id, name: e.session.name, termNumber: e.session.termNumber }
+						: null,
+					branch: e.location ? { id: e.location.id, name: e.location.name } : null,
+					terms,
+					totalFee: totalFee.toFixed(2),
+					paid: paidAmount.toFixed(2),
+					balance: balance.toFixed(2),
+					paymentStatus,
+					enrolledAt: e.enrolledAt,
+				};
+			});
+
+			return {
+				id: p.id,
+				uniqueId: p.uniqueId,
+				// STUDENT column
+				student: {
+					firstNameEn: p.firstNameEn,
+					lastNameEn: p.lastNameEn,
+					fullName: `${p.firstNameEn} ${p.lastNameEn}`,
+					phone: p.phone,
+					status: p.status,
+				},
+				// GUARDIAN column
+				guardian: primaryGuardian
+					? {
+							id: primaryGuardian.id,
+							fullName: primaryGuardian.fullName,
+							relationship: primaryGuardian.relationship,
+							phone: primaryGuardian.phone,
+							email: primaryGuardian.email,
+						}
+					: null,
+				// BRANCH column (participant's home location)
+				branch: p.location ? { id: p.location.id, name: p.location.name } : null,
+				// All enrolments with PROGRAM, TERMS, TOTAL, PAID, BALANCE, STATUS
+				enrolments: enrolmentRows,
+				createdAt: p.createdAt,
+			};
+		});
+
+		return {
+			items,
+			meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+		};
 	}
 
 	async findById(tenantId: string, user: any, id: string) {
