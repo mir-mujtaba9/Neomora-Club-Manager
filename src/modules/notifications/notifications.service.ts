@@ -100,6 +100,35 @@ export class NotificationsService {
    * this method NEVER throws so callers (registration flow) can treat it
    * as fire-and-forget.
    */
+      async enqueueRegistrationRejected(input: {
+    tenantId: string;
+    participantId: string;
+    participantName: string;
+    participantLang: string;
+    guardian: { id: string; fullName: string; phone: string; email: string };
+    reason: string;
+  }): Promise<void> {
+    try {
+      const lang = input.participantLang === 'ar' ? 'ar' : 'en';
+      const body = renderTemplate('REGISTRATION_REJECTED', lang, {
+        guardianName: input.guardian.fullName,
+        participantName: input.participantName,
+        reason: input.reason,
+      });
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        participantId: input.participantId,
+        type: NotificationType.REGISTRATION_CONFIRM,
+        channel: NotificationChannel.EMAIL,
+        recipientEmail: input.guardian.email,
+        bodyText: body,
+      });
+    } catch (err) {
+      this.logger.error(`Failed to enqueue rejection for participant=${input.participantId}`, err);
+    }
+  }
+
   async enqueueRegistrationOutcome(input: RegistrationOutcomeInput): Promise<void> {
     try {
       // 1. Confirmation to the guardian (WhatsApp preferred, Email fallback).
@@ -143,9 +172,7 @@ export class NotificationsService {
         declineUrl: input.declineUrl,
       });
 
-      const channel = input.guardian.phone
-        ? NotificationChannel.WHATSAPP
-        : NotificationChannel.EMAIL;
+      const channel = NotificationChannel.EMAIL;
 
       await this.enqueueAndDispatch({
         tenantId: input.tenantId,
@@ -163,6 +190,45 @@ export class NotificationsService {
         `[enqueueWaitlistOffer] unexpected error for waitlist=${input.waitlistId}: ${(err as Error)?.message}`,
         (err as Error)?.stack,
       );
+    }
+  }
+
+  async enqueueApprovalEmail(input: {
+    tenantId: string;
+    participantId: string;
+    guardianName: string;
+    participantName: string;
+    email: string;
+    portalUrl: string;
+    tempPassword?: string;
+  }): Promise<void> {
+    try {
+      let body: string;
+      if (input.tempPassword) {
+        body = renderTemplate('PARENT_WELCOME', 'en', {
+          guardianName: input.guardianName,
+          participantName: input.participantName,
+          tempPassword: input.tempPassword,
+          portalUrl: input.portalUrl
+        });
+      } else {
+        body = renderTemplate('REGISTRATION_APPROVED', 'en', {
+          guardianName: input.guardianName,
+          participantName: input.participantName,
+          portalUrl: input.portalUrl
+        });
+      }
+
+      await this.enqueueAndDispatch({
+        tenantId: input.tenantId,
+        type: NotificationType.REGISTRATION_CONFIRM,
+        channel: NotificationChannel.EMAIL,
+        participantId: input.participantId,
+        recipientEmail: input.email,
+        bodyText: body,
+      });
+    } catch (err) {
+      this.logger.error('Failed to send approval email', err);
     }
   }
 
@@ -203,9 +269,7 @@ export class NotificationsService {
         paymentUrl: input.paymentUrl,
       });
 
-      const channel = input.guardian.phone
-        ? NotificationChannel.WHATSAPP
-        : NotificationChannel.EMAIL;
+      const channel = NotificationChannel.EMAIL;
 
       await this.enqueueAndDispatch({
         tenantId: input.tenantId,
@@ -259,9 +323,7 @@ export class NotificationsService {
         paymentUrl: input.paymentUrl,
       });
 
-      const channel = input.guardian.phone
-        ? NotificationChannel.WHATSAPP
-        : NotificationChannel.EMAIL;
+      const channel = NotificationChannel.EMAIL;
 
       await this.enqueueAndDispatch({
         tenantId: input.tenantId,
@@ -310,9 +372,7 @@ export class NotificationsService {
         receiptUrl: input.receiptUrl,
       });
 
-      const channel = input.guardian.phone
-        ? NotificationChannel.WHATSAPP
-        : NotificationChannel.EMAIL;
+      const channel = NotificationChannel.EMAIL;
 
       await this.enqueueAndDispatch({
         tenantId: input.tenantId,
@@ -707,9 +767,7 @@ export class NotificationsService {
     // Choose channel: prefer WhatsApp if we have a phone; fall back to Email.
     // Today the guardian always has a phone (schema requires it) so WhatsApp
     // is effectively the default until we add per-tenant channel prefs.
-    const channel = input.guardian.phone
-      ? NotificationChannel.WHATSAPP
-      : NotificationChannel.EMAIL;
+    const channel = NotificationChannel.EMAIL;
 
     await this.enqueueAndDispatch({
       tenantId: input.tenantId,

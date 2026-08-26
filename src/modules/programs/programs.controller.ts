@@ -45,12 +45,14 @@ export class ProgramsController {
   }
 
   @Get()
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_OFFICER)
   @ApiOperation({ summary: 'List programs (optionally filtered by locationId or "none")' })
   findAll(@TenantId() tenantId: string, @Query() query: FindProgramsDto) {
     return this.programsService.findAll(tenantId, query);
   }
 
   @Get(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_OFFICER)
   @ApiOperation({ summary: 'Get program with its rules' })
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.programsService.findOne(tenantId, id);

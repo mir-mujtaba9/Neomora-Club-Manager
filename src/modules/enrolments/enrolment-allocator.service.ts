@@ -103,14 +103,20 @@ export class EnrolmentAllocatorService {
     let programRule: { id: string; capacity: number } | null = null;
 
     if (programId) {
-      // 4a. Fetch programme weekly rate for fee calculation.
-      const program = await tx.program.findFirst({
-        where: { id: programId, deletedAt: null },
-        select: { baseFeePerWeek: true },
+      // 4a. Fetch RateCard weekly rate for fee calculation.
+      const rateCard = await tx.rateCard.findFirst({
+        where: {
+          programId,
+          deletedAt: null,
+          effectiveFrom: { lte: new Date() },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+        },
+        orderBy: { effectiveFrom: 'desc' },
+        select: { weeklyRate: true, registrationFee: true, kitFee: true },
       });
 
-      if (program?.baseFeePerWeek && session.totalWeeks) {
-        totalFee = program.baseFeePerWeek.mul(session.totalWeeks) as Prisma.Decimal;
+      if (rateCard && session.totalWeeks) {
+        totalFee = rateCard.weeklyRate.mul(session.totalWeeks).add(rateCard.registrationFee).add(rateCard.kitFee) as Prisma.Decimal;
       }
 
       // 4b. Find the ProgramRule that covers this participant's birth year
@@ -133,6 +139,13 @@ export class EnrolmentAllocatorService {
         });
       }
     }
+
+    const activeVat = await tx.vatRate.findFirst({
+      where: { tenantId, effectiveFrom: { lte: new Date() } },
+      orderBy: { effectiveFrom: 'desc' }
+    });
+    const vatMultiplier = 1 + (activeVat?.rate ? Number(activeVat.rate) / 100 : 0);
+    totalFee = totalFee.mul(vatMultiplier) as Prisma.Decimal;
 
     // 5. Count current occupants against the appropriate capacity.
     let occupied: number;

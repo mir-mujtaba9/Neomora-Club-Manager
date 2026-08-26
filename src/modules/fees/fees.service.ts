@@ -250,10 +250,16 @@ export class FeesService {
           ? null
           : new Prisma.Decimal(amount);
 
+      const currentVatRate = await tx.vatRate.findFirst({
+        where: { tenantId, effectiveFrom: { lte: new Date() } },
+        orderBy: { effectiveFrom: 'desc' },
+      });
+
       const result = computeEnrolmentFee({
         enrolmentFeeOverride: newOverride,
         sessionLocationFeeOverride: sl?.feeOverride ?? null,
         sessionBaseFee: enrolment.session.baseFee,
+        activeVatRate: currentVatRate?.rate ?? null,
       });
 
       const newBalance = result.total.minus(enrolment.paidAmount);

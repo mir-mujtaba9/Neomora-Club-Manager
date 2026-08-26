@@ -29,6 +29,14 @@ export class EnrolmentsController {
     return this.enrolmentsService.findAll(tenantId, user, query);
   }
 
+  @Get(':id')
+  async findOne(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.enrolmentsService.findOne(tenantId, id);
+  }
+
   @Post()
   @Roles(UserRole.LOCATION_MANAGER, UserRole.SUPER_ADMIN)
   async enrol(

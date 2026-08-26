@@ -8,6 +8,10 @@ export class FindParticipantsDto {
   status?: string;
 
   @IsOptional()
+  @IsString()
+  registrationSource?: string;
+
+  @IsOptional()
   @IsUUID()
   locationId?: string;
 

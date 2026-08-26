@@ -21,6 +21,7 @@ import jwtConfig from './infra/config/jwt.config';
 import storageConfig from './infra/config/storage.config';
 import queueConfig from './infra/config/queue.config';
 import { AuditModule } from './modules/audit/audit.module.js';
+import { GuardiansModule } from './modules/guardians/guardians.module.js';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module.js';
 import { AuthModule } from './modules/auth/auth.module';
 import { GuardianAuthModule } from './modules/auth/guardian-auth.module.js';
@@ -41,6 +42,9 @@ import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { SeasonsModule } from './modules/seasons/seasons.module.js';
 import { ProgramsModule } from './modules/programs/programs.module.js';
 import { FamiliesModule } from './modules/families/families.module.js';
+import { RateCardsModule } from './modules/rate-cards/rate-cards.module.js';
+import { DiscountRulesModule } from './modules/discount-rules/discount-rules.module.js';
+import { VatRatesModule } from './modules/vat-rates/vat-rates.module.js';
 
 @Module({
   imports: [
@@ -82,6 +86,7 @@ import { FamiliesModule } from './modules/families/families.module.js';
     AuditModule,
     AuthModule,
     GuardianAuthModule,
+    GuardiansModule,
     LocationsModule,
     SessionsModule,
     ParticipantsModule,
@@ -104,6 +109,9 @@ import { FamiliesModule } from './modules/families/families.module.js';
     SeasonsModule,
     ProgramsModule,
     FamiliesModule,
+    RateCardsModule,
+    DiscountRulesModule,
+    VatRatesModule,
   ],
   providers: [
     // Plan J (F-32) — global audit interceptor. Writes one tamper-evident

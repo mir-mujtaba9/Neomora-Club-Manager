@@ -87,6 +87,8 @@ export class AuthService {
 				lockedUntil: true,
 				totpEnabled: true,
 				totpSecret: true,
+				isTempPassword: true,
+				fullName: true,
 			},
 		});
 
@@ -167,6 +169,8 @@ export class AuthService {
 				tenantId: user.tenantId,
 				locationId: user.locationId,
 				totpEnabled: user.totpEnabled,
+				isTempPassword: user.isTempPassword,
+				fullName: user.fullName,
 			},
 			tenant: {
 				id: tenant.id,
@@ -187,7 +191,7 @@ export class AuthService {
 				tenantId: payload.tenantId,
 				deletedAt: null,
 			},
-			select: { id: true, email: true, role: true, tenantId: true, locationId: true },
+			select: { id: true, email: true, role: true, tenantId: true, locationId: true, fullName: true },
 		});
 
 		if (!user) {
@@ -276,12 +280,18 @@ export class AuthService {
 			throw new UnauthorizedException('Not authenticated');
 		}
 
+		const dbUser = await this.prisma.user.findUnique({
+			where: { id: user.sub },
+			select: { fullName: true }
+		});
+
 		return {
 			id: user.sub,
 			email: user.email,
 			role: user.role,
 			tenantId: user.tenantId,
 			locationId: user.locationId ?? null,
+			fullName: dbUser?.fullName ?? null,
 		};
 	}
 
@@ -638,7 +648,24 @@ export class AuthService {
 				data: { revoked: true },
 			}),
 		]);
+		
+		return { success: true };
+	}
 
+	async changeTempPassword(userId: string, newPassword: string): Promise<{ success: true }> {
+		if (!newPassword || newPassword.length < 6) {
+			throw new BadRequestException('Password must be at least 6 characters');
+		}
+		const newHash = await bcrypt.hash(newPassword, 10);
+		
+		await this.prisma.user.update({
+			where: { id: userId },
+			data: {
+				passwordHash: newHash,
+				isTempPassword: false
+			}
+		});
+		
 		return { success: true };
 	}
 }

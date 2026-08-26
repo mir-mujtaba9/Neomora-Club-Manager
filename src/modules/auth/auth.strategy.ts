@@ -45,6 +45,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // This return object will be available as request.user in the JwtAuthGuard
     return {
+      id: user.id,
       sub: user.id,
       email: user.email,
       role: user.role,

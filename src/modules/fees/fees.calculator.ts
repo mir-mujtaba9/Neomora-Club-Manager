@@ -27,16 +27,22 @@ export interface ComputeFeeInput {
   sessionLocationFeeOverride?: Prisma.Decimal | number | string | null;
   /** Session base fee. Required — every session has one. */
   sessionBaseFee: Prisma.Decimal | number | string;
+  /** Active VAT rate (e.g., 15 for 15%). Null if no VAT is configured. */
+  activeVatRate?: Prisma.Decimal | number | string | null;
 }
 
 export interface ComputeFeeResult {
+  baseTotal: Prisma.Decimal;
+  vatAmount: Prisma.Decimal;
   total: Prisma.Decimal;
   source: FeeSource;
   breakdown: {
     enrolmentOverride: string | null;
     locationOverride: string | null;
     sessionBase: string;
-    chosen: string;
+    chosenBase: string;
+    vatRate: string | null;
+    vatAmount: string;
   };
 }
 
@@ -51,6 +57,7 @@ export function computeEnrolmentFee(input: ComputeFeeInput): ComputeFeeResult {
   const enrolment = toDecimalOrNull(input.enrolmentFeeOverride);
   const location = toDecimalOrNull(input.sessionLocationFeeOverride);
   const base = toDecimal(input.sessionBaseFee);
+  const vatRate = toDecimalOrNull(input.activeVatRate) || new Prisma.Decimal(0);
 
   let chosen: Prisma.Decimal;
   let source: FeeSource;
@@ -66,14 +73,23 @@ export function computeEnrolmentFee(input: ComputeFeeInput): ComputeFeeResult {
     source = 'SESSION_BASE';
   }
 
+  // e.g. chosen = 100, vatRate = 15 -> vatAmount = 15, total = 115
+  const vatMultiplier = vatRate.dividedBy(100);
+  const vatAmount = chosen.mul(vatMultiplier);
+  const total = chosen.add(vatAmount);
+
   return {
-    total: chosen,
+    baseTotal: chosen,
+    vatAmount,
+    total,
     source,
     breakdown: {
       enrolmentOverride: enrolment?.toString() ?? null,
       locationOverride: location?.toString() ?? null,
       sessionBase: base.toString(),
-      chosen: chosen.toString(),
+      chosenBase: chosen.toString(),
+      vatRate: input.activeVatRate?.toString() ?? null,
+      vatAmount: vatAmount.toString(),
     },
   };
 }

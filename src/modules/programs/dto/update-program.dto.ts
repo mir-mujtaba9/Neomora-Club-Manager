@@ -19,13 +19,4 @@ export class UpdateProgramDto {
   @IsOptional()
   locationId?: string | null;
 
-  @ApiPropertyOptional({
-    example: 175.0,
-    description: 'Fee per week. Pass null to clear (fee calculated elsewhere).',
-  })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  @IsOptional()
-  baseFeePerWeek?: number | null;
 }

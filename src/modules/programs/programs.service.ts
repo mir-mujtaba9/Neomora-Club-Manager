@@ -36,10 +36,6 @@ export class ProgramsService {
         code: dto.code,
         name: dto.name,
         locationId: dto.locationId ?? null,
-        baseFeePerWeek:
-          dto.baseFeePerWeek != null
-            ? new Prisma.Decimal(dto.baseFeePerWeek)
-            : null,
       },
       include: {
         location: { select: { id: true, name: true, city: true } },
@@ -72,8 +68,6 @@ export class ProgramsService {
           code: dto.code,
           name: dto.name,
           locationId: dto.locationId ?? null,
-          baseFeePerWeek:
-            dto.baseFeePerWeek != null ? new Prisma.Decimal(dto.baseFeePerWeek) : null,
         },
       });
 
@@ -172,10 +166,6 @@ export class ProgramsService {
     if (dto.code !== undefined) data.code = dto.code;
     if (dto.name !== undefined) data.name = dto.name;
     if ('locationId' in dto) data.locationId = dto.locationId ?? null;
-    if ('baseFeePerWeek' in dto) {
-      data.baseFeePerWeek =
-        dto.baseFeePerWeek != null ? new Prisma.Decimal(dto.baseFeePerWeek) : null;
-    }
 
     const program = await this.prisma.program.update({
       where: { id },

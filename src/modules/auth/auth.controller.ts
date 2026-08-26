@@ -133,5 +133,16 @@ export class AuthController {
 	async resetPassword(@Body() dto: ResetPasswordDto) {
 		return this.authService.resetPassword(dto);
 	}
+
+	@HttpCode(HttpStatus.OK)
+	@Post('change-temp-password')
+	@ApiBearerAuth('access-token')
+	@ApiOperation({
+		summary: 'Change temporary password',
+		description: 'Changes a temporary password to a permanent one and clears the isTempPassword flag.',
+	})
+	async changeTempPassword(@CurrentUser() user: any, @Body() body: any) {
+		return this.authService.changeTempPassword(user.id || user.sub, body.newPassword);
+	}
 }
 

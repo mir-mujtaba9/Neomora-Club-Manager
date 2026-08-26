@@ -37,6 +37,13 @@ export class ParticipantsController {
 		return this.participantsService.register(dto);
 	}
 
+	@Get('public-requests')
+	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER)
+	@ApiBearerAuth('access-token')
+	async getPublicRequests(@TenantId() tenantId: string) {
+		return this.participantsService.getPublicRequests(tenantId);
+	}
+
 	@Get()
 	@Roles(UserRole.SUPER_ADMIN, UserRole.LOCATION_MANAGER, UserRole.FINANCE_OFFICER, UserRole.STAFF)
 	@ApiScopes('participants:read')

@@ -152,6 +152,7 @@ export class ParticipantsService {
 	) {
 		const {
 			status,
+			registrationSource,
 			locationId,
 			sessionId,
 			guardianId,
@@ -168,6 +169,7 @@ export class ParticipantsService {
 
 		const where: any = { tenantId, deletedAt: null };
 		if (status) where.status = status;
+		if (registrationSource) where.registrationSource = registrationSource;
 		if (locationId) where.locationId = locationId;
 
 		if (guardianId) {
@@ -252,6 +254,73 @@ export class ParticipantsService {
 		return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
 	}
 
+	async getPublicRequests(tenantId: string) {
+		const participants = await this.prisma.participant.findMany({
+			where: {
+				tenantId,
+				status: 'INQUIRY',
+				registrationSource: 'PUBLIC_FORM',
+				deletedAt: null,
+			},
+			include: {
+				guardians: { where: { deletedAt: null }, take: 1 },
+				staffNotes: { 
+					where: { deletedAt: null, note: { startsWith: 'PUBLIC REGISTRATION REQUEST:' } },
+					orderBy: { createdAt: 'desc' },
+					take: 1
+				},
+			},
+			orderBy: { createdAt: 'desc' },
+		});
+
+		return participants.map((p) => {
+			const guardian = p.guardians[0];
+			const noteText = p.staffNotes[0]?.note || '';
+			
+			let programId = '';
+			let termIds: string[] = [];
+			let cleanMessage = noteText;
+			
+			const sysDataMatch = noteText.match(/\[SYSTEM_DATA:\s*prog=([^,]*),\s*terms=([^\]]*)\]/);
+			if (sysDataMatch) {
+				programId = sysDataMatch[1].trim();
+				if (sysDataMatch[2]) {
+					termIds = sysDataMatch[2].split(',').map(s => s.trim()).filter(Boolean);
+				}
+				// Remove the system data block from the user-facing message
+				cleanMessage = noteText.replace(/\[SYSTEM_DATA:[^\]]+\]/, '').trim();
+			} else {
+				// Fallback for old records without SYSTEM_DATA block
+				const programMatch = noteText.match(/program ([\w-]+)/);
+				if (programMatch && programMatch[1] !== 'unknown') {
+					programId = programMatch[1];
+				}
+				const termsMatch = noteText.match(/terms: ([\w-,\s]+)\./);
+				if (termsMatch) {
+					termIds = termsMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+				}
+			}
+
+			return {
+				id: p.id,
+				studentName: `${p.firstNameEn} ${p.lastNameEn}`,
+				dob: p.dateOfBirth.toISOString().split('T')[0],
+				guardianName: guardian?.fullName || '',
+				guardianPhone: guardian?.phone || '',
+				guardianEmail: guardian?.email || '',
+				locationId: p.locationId,
+				programId,
+				preferredCohortLabel: '',
+				kitOptIn: false,
+				termIds,
+				message: cleanMessage,
+				submittedAt: p.createdAt.toISOString(),
+				status: 'pending',
+				resultingStudentId: undefined,
+			};
+		});
+	}
+
 	/**
 	 * Admin-only view of participants whose record originated from the staff
 	 * "Register Student" form (POST /enrolments/staff-register).
@@ -274,7 +343,7 @@ export class ParticipantsService {
 		const where: any = {
 			tenantId,
 			deletedAt: null,
-			registrationSource: 'STAFF_REGISTERED',
+			status: { not: 'INQUIRY' },
 		};
 
 		if (locationId) where.locationId = locationId;
@@ -524,7 +593,7 @@ export class ParticipantsService {
 		const next = dto.status as unknown as string;
 
 		const allowedTransitions: Record<string, string[]> = {
-			INQUIRY: ['DOCUMENTS_PENDING'],
+			INQUIRY: ['DOCUMENTS_PENDING', 'WITHDRAWN'],
 			DOCUMENTS_PENDING: ['FEE_PENDING'],
 			FEE_PENDING: ['ACTIVE'],
 			ACTIVE: ['ON_HOLD', 'COMPLETED', 'WITHDRAWN'],
@@ -570,7 +639,29 @@ export class ParticipantsService {
 			}
 		}
 
-		const updated = await this.prisma.participant.update({ where: { id: participant.id }, data: { status: dto.status as any } });
+				const updated = await this.prisma.participant.update({ where: { id: participant.id }, data: { status: dto.status as any } });
+
+		// Trigger rejection email if public request is withdrawn
+		if (current === 'INQUIRY' && next === 'WITHDRAWN') {
+			const guardian = await this.prisma.guardian.findFirst({
+				where: { participantId: id, deletedAt: null },
+			});
+			if (guardian && guardian.email) {
+				await this.notifications.enqueueRegistrationRejected({
+					tenantId,
+					participantId: id,
+					participantName: `${updated.firstNameEn} ${updated.lastNameEn}`,
+					participantLang: 'en',
+					guardian: {
+						id: guardian.id,
+						fullName: guardian.fullName,
+						phone: guardian.phone || '',
+						email: guardian.email,
+					},
+					reason: dto.reason || 'No reason provided',
+				});
+			}
+		}
 
 		// Plan H — every transition writes an AuditLog row so the
 		// status-history endpoint can reconstruct the participant's timeline.

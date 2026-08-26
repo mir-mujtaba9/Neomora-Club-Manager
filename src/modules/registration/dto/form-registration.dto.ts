@@ -77,12 +77,12 @@ export class FormRegistrationDto {
   preferredLang?: string;
 
   /**
-   * The Term (Session with seasonId set) the participant wants to join.
+   * The Terms (Sessions) the participant wants to join.
    * When omitted the participant is created at INQUIRY status with no enrolment.
    */
-  @IsUUID('all', { message: i18n.uuid })
+  @IsUUID('all', { each: true, message: i18n.uuid })
   @IsOptional()
-  sessionId?: string;
+  termIds?: string[];
 
   /**
    * The Programme the participant is enrolling into.
@@ -92,6 +92,10 @@ export class FormRegistrationDto {
   @IsUUID('all', { message: i18n.uuid })
   @IsOptional()
   programId?: string;
+
+  @IsUUID('all', { message: i18n.uuid })
+  @IsNotEmpty({ message: i18n.notEmpty })
+  locationId!: string;
 
   @ValidateNested()
   @Type(() => FormGuardianDto)

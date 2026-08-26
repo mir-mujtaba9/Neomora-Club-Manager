@@ -111,7 +111,16 @@ export class RegistrationService {
         id: true,
         code: true,
         name: true,
-        baseFeePerWeek: true,
+        rateCards: {
+          where: {
+            deletedAt: null,
+            effectiveFrom: { lte: new Date() },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+          },
+          orderBy: { effectiveFrom: 'desc' },
+          take: 1,
+          select: { weeklyRate: true, registrationFee: true, kitFee: true, minBillableWeeks: true },
+        },
         rules: {
           where: { deletedAt: null },
           orderBy: { minBirthYear: 'asc' },
@@ -140,9 +149,18 @@ export class RegistrationService {
       },
       tenant:         location.tenant,
       sessions,
-      programs,
       hasOpenSessions: sessions.length > 0,
       hasPrograms:     programs.length > 0,
+      programs: programs.map(p => {
+        const rate = p.rateCards?.[0];
+        const { rateCards, name, ...rest } = p;
+        return {
+          ...rest,
+          name: p.name, // handle duplicate key
+          baseFeePerWeek: rate?.weeklyRate ?? null,
+          rateCard: rate ?? null,
+        };
+      })
     };
   }
 
@@ -161,48 +179,55 @@ export class RegistrationService {
    *   5. Fire notifications after commit (non-blocking).
    */
   async submitForm(slug: string, dto: FormRegistrationDto) {
-    const location = await this.prisma.location.findUnique({
-      where: { registrationSlug: slug },
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug },
+    });
+
+    if (!tenant || tenant.deletedAt || tenant.status !== 'ACTIVE') {
+      throw new NotFoundException(`Tenant '${slug}' is not available`);
+    }
+
+    const location = await this.prisma.location.findFirst({
+      where: { id: dto.locationId, tenantId: tenant.id },
     });
 
     if (!location || location.deletedAt || location.status !== 'active') {
-      throw new NotFoundException(`Registration form for '${slug}' is not available`);
+      throw new NotFoundException(`Location is not available`);
     }
 
-    const tenantId = location.tenantId;
+    const tenantId = tenant.id;
 
     const dob = new Date(dto.dateOfBirth);
     if (isNaN(dob.getTime())) {
       throw new BadRequestException('Invalid dateOfBirth');
     }
 
-    // Validate session if provided
+    // Validate terms if provided
     let sessionName: string | null = null;
-    if (dto.sessionId) {
+    if (dto.termIds && dto.termIds.length > 0) {
       const now = new Date();
-      const openSession = await this.prisma.session.findFirst({
+      const openSessions = await this.prisma.session.findMany({
         where: {
-          id: dto.sessionId,
+          id: { in: dto.termIds },
           tenantId,
           status: 'OPEN',
           deletedAt: null,
           OR: [{ enrolOpenAt: null }, { enrolOpenAt: { lte: now } }],
           AND: [{ OR: [{ enrolCloseAt: null }, { enrolCloseAt: { gte: now } }] }],
-          // Must be offered at this location
           sessionLocations: { some: { locationId: location.id } },
         },
         select: { id: true, name: true },
       });
-      if (!openSession) {
-        throw new NotFoundException('The selected term is not available at this location');
+      if (openSessions.length !== dto.termIds.length) {
+        throw new NotFoundException('One or more selected terms are not available at this location');
       }
-      sessionName = openSession.name;
+      sessionName = openSessions.map(s => s.name).join(', ');
     }
 
     // Validate programme if provided
     if (dto.programId) {
-      if (!dto.sessionId) {
-        throw new BadRequestException('sessionId is required when programId is provided');
+      if (!dto.termIds || dto.termIds.length === 0) {
+        throw new BadRequestException('At least one term must be selected when a programme is chosen');
       }
       const program = await this.prisma.program.findFirst({
         where: {
@@ -252,30 +277,42 @@ export class RegistrationService {
           },
         });
 
-        let enrolment: any   = null;
-        let waitlistEntry: any = null;
-        let enrolmentStatus: 'ENROLLED' | 'WAITLISTED' | 'NONE' = 'NONE';
-
-        if (dto.sessionId) {
-          const allocation = await this.allocator.allocate(tx, {
-            tenantId,
-            participantId: participant.id,
-            sessionId:     dto.sessionId,
-            locationId:    location.id,
-            paymentPlanType: PaymentPlanType.FULL,
-            programId:     dto.programId,
-          });
-
-          if (allocation.outcome === 'ENROLLED') {
-            enrolment       = allocation.enrolment;
-            enrolmentStatus = 'ENROLLED';
-          } else {
-            waitlistEntry   = allocation.waitlist;
-            enrolmentStatus = 'WAITLISTED';
+        let enrolmentStatus: 'NONE' = 'NONE';
+        
+        // Save requested terms/programs as a StaffNote for the admin to see during approval
+        if (dto.termIds && dto.termIds.length > 0) {
+          let programName = 'Unknown Program';
+          if (dto.programId) {
+            const prog = await tx.program.findUnique({ where: { id: dto.programId } });
+            if (prog) {
+              programName = prog.name;
+            }
           }
-        }
 
-        return { participant, guardian, enrolment, waitlist: waitlistEntry, enrolmentStatus };
+          let termNames = 'Unknown Terms';
+          let locName = '';
+          if (dto.termIds && dto.termIds.length > 0) {
+            const terms = await tx.session.findMany({ 
+              where: { id: { in: dto.termIds } },
+              include: { sessionLocations: { include: { location: true } } }
+            });
+            if (terms.length > 0) {
+              termNames = terms.map(t => t.name).join(', ');
+              const termLoc = terms[0].sessionLocations?.[0]?.location?.name;
+              if (termLoc) locName = ` at ${termLoc}`;
+            }
+          }
+
+          await tx.staffNote.create({
+            data: {
+              tenantId,
+              participantId: participant.id,
+              note: `PUBLIC REGISTRATION REQUEST: Participant requested to join program "${programName}"${locName} for terms: "${termNames}". Approve via Staff Registration.`,
+              authorId: 'system', 
+            }
+          });
+        }
+        return { participant, guardian, enrolment: null as any, waitlist: null as any, enrolmentStatus };
       },
       { timeout: 60000, maxWait: 60000 },
     );
@@ -305,8 +342,8 @@ export class RegistrationService {
       participantId:    result.participant.id,
       uniqueId:         result.participant.uniqueId,
       enrolmentStatus:  result.enrolmentStatus,
-      ...(result.enrolment    && { enrolmentId:      result.enrolment.id }),
-      ...(result.waitlist     && { waitlistPosition: result.waitlist.position }),
+      enrolmentId: null,
+      waitlistPosition: null,
       message: this.buildMessage(result.enrolmentStatus),
     };
   }

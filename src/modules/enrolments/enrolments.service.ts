@@ -1,16 +1,18 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SessionStatus } from '@prisma/client';
+import { Prisma, SessionStatus, UserRole as PrismaUserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/database/prisma.service.js';
+import * as bcrypt from 'bcrypt';
 import { EnrolmentAllocatorService } from './enrolment-allocator.service.js';
 import { CreateEnrolmentDto } from './dto/create-enrolment.dto.js';
 import { ReEnrolDto } from './dto/re-enrol.dto.js';
 import { FindEnrolmentsDto } from './dto/find-enrolments.dto.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { CalculateFeeDto } from './dto/calculate-fee.dto.js';
 import { StaffRegisterDto } from './dto/staff-register.dto.js';
 import { GetAvailableTermsDto } from './dto/get-available-terms.dto.js';
@@ -24,6 +26,7 @@ export class EnrolmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly allocator: EnrolmentAllocatorService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // â”€â”€â”€ Overlap guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -277,12 +280,27 @@ export class EnrolmentsService {
     ]);
 
     return {
-      items,
+    items,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
-  // â”€â”€â”€ Calculate fee (live preview for staff form) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  async findOne(tenantId: string, id: string) {
+    const enrolment = await this.prisma.enrolment.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      include: {
+        participant: { include: { guardians: true } },
+        session:     true,
+        location:    true,
+        program:     { select: { id: true, code: true, name: true } },
+        invoices:    { include: { payments: true } },
+      },
+    });
+    if (!enrolment) throw new NotFoundException('Enrolment not found');
+    return enrolment;
+  }
+
+  // ─── Calculate fee (live preview for staff form) ──────────────────────â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Pure fee calculation â€” no side effects.
@@ -318,13 +336,24 @@ export class EnrolmentsService {
     if (dto.programId) {
       const program = await this.prisma.program.findFirst({
         where: { id: dto.programId, tenantId, deletedAt: null },
-        select: { baseFeePerWeek: true, name: true, code: true },
+        select: { name: true, code: true },
       });
       if (!program) throw new NotFoundException('Program not found');
 
-      if (program.baseFeePerWeek && session.totalWeeks) {
-        perTermFee = (program.baseFeePerWeek as Prisma.Decimal).mul(session.totalWeeks);
-        feeSource  = 'PROGRAM_WEEKLY_RATE';
+      const rateCard = await this.prisma.rateCard.findFirst({
+        where: {
+          programId: dto.programId,
+          deletedAt: null,
+          effectiveFrom: { lte: new Date() },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+        },
+        orderBy: { effectiveFrom: 'desc' },
+        select: { weeklyRate: true, registrationFee: true, kitFee: true },
+      });
+
+      if (rateCard && session.totalWeeks) {
+        perTermFee = (rateCard.weeklyRate as Prisma.Decimal).mul(session.totalWeeks).add(rateCard.registrationFee).add(rateCard.kitFee);
+        feeSource  = 'RATE_CARD_WEEKLY_RATE';
       } else {
         perTermFee = (session.sessionLocations[0]?.feeOverride ?? session.baseFee) as Prisma.Decimal;
         feeSource  = session.sessionLocations[0]?.feeOverride ? 'LOCATION_OVERRIDE' : 'SESSION_BASE';
@@ -333,6 +362,13 @@ export class EnrolmentsService {
       perTermFee = (session.sessionLocations[0]?.feeOverride ?? session.baseFee) as Prisma.Decimal;
       feeSource  = session.sessionLocations[0]?.feeOverride ? 'LOCATION_OVERRIDE' : 'SESSION_BASE';
     }
+
+    const activeVat = await this.prisma.vatRate.findFirst({
+      where: { tenantId, effectiveFrom: { lte: new Date() } },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    const vatMultiplier = 1 + (activeVat?.rate ? Number(activeVat.rate) / 100 : 0);
+    perTermFee = perTermFee.mul(vatMultiplier) as Prisma.Decimal;
 
     const commitmentLength = dto.commitmentLength ?? 1;
     const totalFee = perTermFee.mul(commitmentLength);
@@ -458,23 +494,34 @@ export class EnrolmentsService {
       throw new ForbiddenException('Location managers can only register students at their assigned location');
     }
 
-    // â”€â”€ Validate program once â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    let programBaseFeePerWeek: Prisma.Decimal | null = null;
+    // â”€â”€ Validate program and load RateCard once â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    let rateCard: any = null;
     if (dto.programId) {
       const program = await this.prisma.program.findFirst({
         where: { id: dto.programId, tenantId, deletedAt: null },
-        select: { baseFeePerWeek: true },
       });
       if (!program) throw new NotFoundException('Program not found');
-      programBaseFeePerWeek = program.baseFeePerWeek as Prisma.Decimal | null;
+      
+      rateCard = await this.prisma.rateCard.findFirst({
+        where: {
+          programId: dto.programId,
+          deletedAt: null,
+          effectiveFrom: { lte: new Date() },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+        },
+        orderBy: { effectiveFrom: 'desc' },
+        select: { weeklyRate: true, registrationFee: true, kitFee: true },
+      });
     }
 
     // â”€â”€ Validate every term and pre-compute per-term fees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Done outside the transaction for early, clean 400/404 responses.
     const now = new Date();
 
-    type TermContext = { session: any; perTermFee: Prisma.Decimal };
+    type TermContext = { session: any; perTermFee: Prisma.Decimal; breakdown?: any };
     const termContexts = new Map<string, TermContext>();
+
+    let appliedOneTimeFees = false;
 
     for (const termId of dto.termIds) {
       const session = await this.prisma.session.findFirst({
@@ -501,17 +548,48 @@ export class EnrolmentsService {
         throw new BadRequestException(`Term "${session.name}" is closed and cannot accept new enrolments`);
       }
 
-      let perTermFee: Prisma.Decimal;
-      if (programBaseFeePerWeek && session.totalWeeks) {
-        perTermFee = programBaseFeePerWeek.mul(session.totalWeeks);
+      let baseFeeCalc: Prisma.Decimal;
+      let kitFeeCalc = new Prisma.Decimal(0);
+      let regFeeCalc = new Prisma.Decimal(0);
+
+      if (rateCard && session.totalWeeks) {
+        baseFeeCalc = (rateCard.weeklyRate as Prisma.Decimal).mul(session.totalWeeks);
+        if (!appliedOneTimeFees) {
+          kitFeeCalc = rateCard.kitFee as Prisma.Decimal;
+          regFeeCalc = rateCard.registrationFee as Prisma.Decimal;
+          appliedOneTimeFees = true;
+        }
       } else {
-        perTermFee = (session.sessionLocations[0]?.feeOverride ?? session.baseFee) as Prisma.Decimal;
+        baseFeeCalc = (session.sessionLocations[0]?.feeOverride ?? session.baseFee) as Prisma.Decimal;
       }
 
-      termContexts.set(termId, { session, perTermFee });
+      const subTotal = baseFeeCalc.add(kitFeeCalc).add(regFeeCalc);
+
+      const activeVat = await this.prisma.vatRate.findFirst({
+        where: { tenantId, effectiveFrom: { lte: new Date() } },
+        orderBy: { effectiveFrom: 'desc' },
+      });
+      const vatMultiplier = 1 + (activeVat?.rate ? Number(activeVat.rate) / 100 : 0);
+      const perTermFee = subTotal.mul(vatMultiplier) as Prisma.Decimal;
+      const vatAmount = perTermFee.sub(subTotal);
+
+      const breakdown = {
+        baseFee: baseFeeCalc.toNumber(),
+        kitFee: kitFeeCalc.toNumber(),
+        registrationFee: regFeeCalc.toNumber(),
+        discountAmount: 0,
+        discountPct: 0,
+        subtotal: subTotal.toNumber(),
+        vatRate: activeVat?.rate ? Number(activeVat.rate) : 0,
+        vatAmount: vatAmount.toNumber(),
+        total: perTermFee.toNumber()
+      };
+
+      termContexts.set(termId, { session, perTermFee, breakdown });
     }
 
     // â”€â”€ Transaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    let welcomeEmailVars: any = null;
     const txResult = await this.prisma.$transaction(
       async (tx) => {
         // Step 1 â€” resolve or create participant (once for all terms)
@@ -573,6 +651,54 @@ export class EnrolmentsService {
           participantId = participant.id;
         }
 
+        // --- Step 1.5 Ensure Parent has a Master Account (User) ---
+        const guardian = await tx.guardian.findFirst({
+          where: { participantId },
+        });
+
+        if (guardian && guardian.email) {
+          let parentUser = await tx.user.findFirst({
+            where: { email: guardian.email.toLowerCase(), tenantId },
+          });
+
+          if (!parentUser) {
+            const tempPassword = Math.random().toString(36).slice(-6);
+            const salt = await bcrypt.genSalt();
+            const passwordHash = await bcrypt.hash(tempPassword, salt);
+
+            parentUser = await tx.user.create({
+              data: {
+                tenantId,
+                email: guardian.email.toLowerCase(),
+                passwordHash,
+                role: PrismaUserRole.PARENT,
+                isTempPassword: true,
+                fullName: guardian.fullName,
+              }
+            });
+
+            welcomeEmailVars = {
+               email: parentUser.email,
+               tempPassword,
+               guardianName: guardian.fullName,
+               portalUrl: 'http://localhost:5173/login-select' // Demo URL, real one would be config driven
+            };
+          } else {
+            welcomeEmailVars = {
+               email: parentUser.email,
+               guardianName: guardian.fullName,
+               portalUrl: 'http://localhost:5173/login-select'
+            };
+          }
+
+          if (guardian.userId !== parentUser.id) {
+            await tx.guardian.update({
+              where: { id: guardian.id },
+              data: { userId: parentUser.id },
+            });
+          }
+        }
+
         // Step 2 â€” allocate each term in sequence
         const joinDate = dto.joinDate ? new Date(dto.joinDate) : null;
 
@@ -590,7 +716,7 @@ export class EnrolmentsService {
 
         const termResults: TermResult[] = [];
 
-        for (const [termId, { session, perTermFee }] of termContexts) {
+        for (const [termId, { session, perTermFee, breakdown }] of termContexts) {
           const alreadyEnrolled = await tx.enrolment.findFirst({
             where: {
               tenantId,
@@ -641,6 +767,7 @@ export class EnrolmentsService {
                 enrolmentId:     enrolment.id,
                 invoiceNumber,
                 amount:          perTermFee,
+                breakdown,
                 dueDate,
                 status:          'PENDING' as any,
                 paymentPlanType: 'FULL' as any,
@@ -681,6 +808,14 @@ export class EnrolmentsService {
           }
         }
 
+        // Move participant out of INQUIRY if they successfully enrolled
+        if (termResults.some(r => r.outcome === 'ENROLLED')) {
+          await tx.participant.update({
+            where: { id: participantId },
+            data: { status: 'FEE_PENDING' as any },
+          });
+        }
+
         return { participantId, termResults };
       },
       { timeout: 60000, maxWait: 60000 },
@@ -688,6 +823,20 @@ export class EnrolmentsService {
 
     const enrolled   = txResult.termResults.filter((r) => r.outcome === 'ENROLLED');
     const waitlisted = txResult.termResults.filter((r) => r.outcome === 'WAITLISTED');
+
+    if (welcomeEmailVars) {
+      let pName = dto.firstNameEn;
+      if (!pName) {
+        const p = await this.prisma.participant.findUnique({ where: { id: txResult.participantId } });
+        pName = p?.firstNameEn || 'Student';
+      }
+      this.notifications.enqueueApprovalEmail({
+        tenantId,
+        participantId: txResult.participantId,
+        participantName: pName,
+        ...welcomeEmailVars
+      });
+    }
 
     return {
       success: true,

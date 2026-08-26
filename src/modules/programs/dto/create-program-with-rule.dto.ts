@@ -20,16 +20,6 @@ export class CreateProgramWithRuleDto {
   @IsOptional()
   locationId?: string;
 
-  @ApiPropertyOptional({
-    example: 150.0,
-    description:
-      'Fee per week for this programme. Used to auto-calculate enrolment total: baseFeePerWeek × term.totalWeeks. Leave null until rate card is confirmed.',
-  })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  @IsOptional()
-  baseFeePerWeek?: number;
 
   @ApiProperty({ type: CreateProgramRuleDto, description: 'Primary eligibility rule created alongside the program' })
   @ValidateNested()

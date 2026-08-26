@@ -41,9 +41,15 @@ const REGISTRY: {
   },
   REGISTRATION_INQUIRY: {
     en: (v) =>
-      `Hi ${v.guardianName}, thank you for registering ${v.participantName} at ${v.locationName}. Unique ID: ${v.uniqueId}. A staff member will contact you to help select a session.`,
+      `Hi ${v.guardianName}, we have received your registration request for ${v.participantName}! It has been sent to our admin team for review. Please wait for a confirmation email from us soon.`,
     ar: (v) =>
-      `مرحباً ${v.guardianName}، شكراً لتسجيل ${v.participantName} في فرع ${v.locationName}. الرقم التعريفي: ${v.uniqueId}. سيتواصل معكم أحد الموظفين لمساعدتكم في اختيار الدورة.`,
+      `مرحبًا ${v.guardianName}، لقد تلقينا طلب التسجيل الخاص بـ ${v.participantName}! تم إرساله إلى فريق الإدارة للمراجعة. يرجى الانتظار للحصول على رسالة تأكيد منا قريبًا.`,
+  },
+  REGISTRATION_REJECTED: {
+    en: (v) =>
+      `Hi ${v.guardianName}, unfortunately your registration request for ${v.participantName} has been rejected. Reason: ${v.reason}. Please feel free to apply again later.`,
+    ar: (v) =>
+      `مرحبًا ${v.guardianName}، للأسف تم رفض طلب التسجيل الخاص بـ ${v.participantName}. السبب: ${v.reason}. يرجى عدم التردد في التقديم مرة أخرى لاحقًا.`,
   },
   STAFF_ALERT_NEW_INQUIRY: {
     en: (v) =>
@@ -101,9 +107,21 @@ const REGISTRY: {
   },
   PASSWORD_RESET: {
     en: (v) =>
-      `Hi ${v.userName}, we received a request to reset your Club Manager password. The link below is valid for ${v.expiresIn}:\n${v.resetUrl}\n\nIf you did not request this, you can safely ignore this email.`,
+      `Hi ${v.userName}, you requested a password reset. Please click the link below to set a new password:\n${v.resetUrl}\n\nThis link is valid for ${v.expiresIn}.`,
     ar: (v) =>
-      `مرحباً ${v.userName}، وصلنا طلب لإعادة تعيين كلمة المرور. الرابط أدناه صالح لمدة ${v.expiresIn}:\n${v.resetUrl}\n\nإذا لم تطلب ذلك، يمكنك تجاهل هذا البريد بأمان.`,
+      `مرحباً ${v.userName}، لقد طلبت إعادة تعيين كلمة المرور. يرجى النقر على الرابط أدناه لتعيين كلمة مرور جديدة:\n${v.resetUrl}\n\nهذا الرابط صالح لمدة ${v.expiresIn}.`,
+  },
+  PARENT_WELCOME: {
+    en: (v) =>
+      `Good news, your request for ${v.participantName} has been approved! You can now log into your parent portal to view your child's schedule and pay your fees.\n\nPortal: ${v.portalUrl}\nTemporary Password: ${v.tempPassword}\n\nYou will be asked to change this password when you log in.`,
+    ar: (v) =>
+      `أخبار جيدة، تمت الموافقة على طلب تسجيل ${v.participantName}! يمكنك الآن تسجيل الدخول إلى بوابة ولي الأمر لعرض جدول طفلك ودفع الرسوم.\n\nالبوابة: ${v.portalUrl}\nكلمة المرور المؤقتة: ${v.tempPassword}\n\nسيُطلب منك تغيير كلمة المرور عند تسجيل الدخول.`,
+  },
+  REGISTRATION_APPROVED: {
+    en: (v) =>
+      `Good news! Your registration request for ${v.participantName} has been approved. They have been added to your existing Parent Portal. You can log in using your normal password to view their schedule and pay their fees.\n\nPortal: ${v.portalUrl}`,
+    ar: (v) =>
+      `أخبار جيدة! تمت الموافقة على طلب تسجيل ${v.participantName}. تمت إضافتهم إلى بوابة ولي الأمر الحالية الخاصة بك. يمكنك تسجيل الدخول باستخدام كلمة المرور المعتادة لعرض جدولهم ودفع الرسوم.\n\nالبوابة: ${v.portalUrl}`,
   },
 };
 

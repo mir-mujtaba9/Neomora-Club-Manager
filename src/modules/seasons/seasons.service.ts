@@ -315,17 +315,25 @@ export class SeasonsService {
       };
     }
 
-    // Pre-fetch programmes that have a weekly rate, so we only query DB once
+    // Pre-fetch rate cards that have a weekly rate, so we only query DB once
     const programIds = [...new Set(sourceEnrolments.map((e) => e.programId).filter(Boolean))] as string[];
-    const programMap = new Map<string, Prisma.Decimal | null>();
+    const programMap = new Map<string, any>();
 
     if (programIds.length > 0) {
-      const programs = await this.prisma.program.findMany({
-        where: { id: { in: programIds } },
-        select: { id: true, baseFeePerWeek: true },
+      const rateCards = await this.prisma.rateCard.findMany({
+        where: {
+          programId: { in: programIds },
+          deletedAt: null,
+          effectiveFrom: { lte: new Date() },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+        },
+        orderBy: { effectiveFrom: 'desc' },
       });
-      for (const p of programs) {
-        programMap.set(p.id, p.baseFeePerWeek);
+      // Pick the first one for each program
+      for (const rc of rateCards) {
+        if (!programMap.has(rc.programId)) {
+          programMap.set(rc.programId, rc);
+        }
       }
     }
 
@@ -350,11 +358,11 @@ export class SeasonsService {
           continue;
         }
 
-        // Calculate fee: use programme weekly rate if available, else carry forward
-        const weeklyRate = src.programId ? programMap.get(src.programId) : null;
+        // Calculate fee: use rate card if available, else carry forward
+        const rateCard = src.programId ? programMap.get(src.programId) : null;
         const totalFee: Prisma.Decimal =
-          weeklyRate && targetTerm.totalWeeks
-            ? weeklyRate.mul(targetTerm.totalWeeks)
+          rateCard && targetTerm.totalWeeks
+            ? (rateCard.weeklyRate as Prisma.Decimal).mul(targetTerm.totalWeeks).add(rateCard.registrationFee).add(rateCard.kitFee)
             : src.totalFee;
 
         const enrolment = await tx.enrolment.create({

@@ -20,13 +20,15 @@ import { StubWhatsAppChannel } from './channels/stub-whatsapp.channel.js';
  * a real provider is a one-line change in NotificationChannelFactory's
  * constructor injection — no caller code touched.
  */
+import { NodemailerEmailChannel } from './channels/nodemailer-email.channel.js';
+
 @Module({
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
     NotificationChannelFactory,
     StubWhatsAppChannel,
-    StubEmailChannel,
+    NodemailerEmailChannel,
   ],
   exports: [NotificationsService],
 })

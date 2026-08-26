@@ -11,13 +11,16 @@ export type TemplateKey =
   | 'REGISTRATION_ENROLLED'
   | 'REGISTRATION_WAITLISTED'
   | 'REGISTRATION_INQUIRY'
+  | 'REGISTRATION_REJECTED'
   | 'STAFF_ALERT_NEW_INQUIRY'
   | 'WAITLIST_OFFER'
   | 'FEE_INVOICE'
   | 'PAYMENT_REMINDER'
   | 'PAYMENT_CONFIRM'
   | 'GUARDIAN_MAGIC_LINK'
-  | 'PASSWORD_RESET';
+  | 'PASSWORD_RESET'
+  | 'PARENT_WELCOME'
+  | 'REGISTRATION_APPROVED';
 
 /**
  * Shape of variables expected by each template. Renderers receive this
@@ -45,6 +48,11 @@ export interface TemplateVarsByKey {
     participantName: string;
     locationName: string;
     uniqueId: string;
+  };
+  REGISTRATION_REJECTED: {
+    guardianName: string;
+    participantName: string;
+    reason: string;
   };
   STAFF_ALERT_NEW_INQUIRY: {
     participantName: string;
@@ -129,6 +137,17 @@ export interface TemplateVarsByKey {
     resetUrl: string;
     /** Human-friendly TTL hint, e.g. "1 hour". */
     expiresIn: string;
+  };
+  PARENT_WELCOME: {
+    guardianName: string;
+    participantName: string;
+    tempPassword: string;
+    portalUrl: string;
+  };
+  REGISTRATION_APPROVED: {
+    guardianName: string;
+    participantName: string;
+    portalUrl: string;
   };
 }
 
