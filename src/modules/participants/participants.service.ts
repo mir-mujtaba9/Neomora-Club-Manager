@@ -343,7 +343,7 @@ export class ParticipantsService {
 		const where: any = {
 			tenantId,
 			deletedAt: null,
-			status: { not: 'INQUIRY' },
+			status: { notIn: ['INQUIRY', 'WITHDRAWN'] },
 		};
 
 		if (locationId) where.locationId = locationId;
