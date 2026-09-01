@@ -868,4 +868,101 @@ export class NotificationsService {
       createdAt: true,
     } satisfies Prisma.NotificationSelect;
   }
+
+  async updateWhatsAppConnection(tenantId: string, wabaId: string, phoneNumberId: string, token: string) {
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { wabaId, whatsappPhoneId: phoneNumberId, whatsappToken: token },
+    });
+  }
+
+  async updateNotificationStatus(wamid: string, status: NotificationStatus, failureReason: string | null = null) {
+    await this.prisma.notification.updateMany({
+      where: { externalId: wamid },
+      data: { status, failureReason },
+    });
+  }
+
+  async updateTemplateStatus(templateName: string, status: string) {
+    await this.prisma.messageTemplate.updateMany({
+      where: { name: templateName },
+      data: { status },
+    });
+  }
+
+  async getTemplates(tenantId: string) {
+    return this.prisma.messageTemplate.findMany({ where: { tenantId } });
+  }
+
+  async createTemplate(tenantId: string, data: { name: string; category: string; language: string; body: string }) {
+    // 1. Create in DB as PENDING
+    const template = await this.prisma.messageTemplate.create({
+      data: {
+        tenantId,
+        name: data.name,
+        category: data.category,
+        language: data.language,
+        body: data.body,
+        status: 'PENDING',
+      },
+    });
+
+    // 2. Submit to Meta API
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (tenant?.wabaId && tenant?.whatsappToken) {
+      try {
+        const res = await fetch(`https://graph.facebook.com/v25.0/${tenant.wabaId}/message_templates`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tenant.whatsappToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: data.name,
+            language: data.language,
+            category: data.category,
+            components: [
+              {
+                type: 'BODY',
+                text: data.body,
+              },
+            ],
+          }),
+        });
+        
+        const metaRes = await (res.json() as Promise<any>);
+        if (metaRes.id) {
+          await this.prisma.messageTemplate.update({
+            where: { id: template.id },
+            data: { metaId: metaRes.id },
+          });
+        } else {
+          console.error("Meta Template Submission Failed:", metaRes);
+        }
+      } catch (err) {
+        console.error("Failed to submit template to Meta:", err);
+      }
+    }
+
+    return template;
+  }
+
+  async getRules(tenantId: string) {
+    return this.prisma.automationRule.findMany({
+      where: { tenantId },
+      include: { template: true },
+    });
+  }
+
+  async createRule(tenantId: string, data: { trigger: string; templateId: string; channel: string }) {
+    return this.prisma.automationRule.create({
+      data: {
+        tenantId,
+        trigger: data.trigger,
+        templateId: data.templateId,
+        channel: data.channel,
+        enabled: true,
+      },
+    });
+  }
 }

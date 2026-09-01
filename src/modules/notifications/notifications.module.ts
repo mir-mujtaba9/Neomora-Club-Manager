@@ -21,9 +21,10 @@ import { StubWhatsAppChannel } from './channels/stub-whatsapp.channel.js';
  * constructor injection — no caller code touched.
  */
 import { NodemailerEmailChannel } from './channels/nodemailer-email.channel.js';
+import { WhatsAppWebhookController } from './whatsapp-webhook.controller.js';
 
 @Module({
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, WhatsAppWebhookController],
   providers: [
     NotificationsService,
     NotificationChannelFactory,

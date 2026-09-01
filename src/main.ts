@@ -21,8 +21,11 @@ async function bootstrap() {
   });
 
   // Enable CORS
-  app.enableCors();
-
+  app.enableCors({
+    origin: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: '*',
+  });
   // Global validation pipe — Plan E. I18nValidationPipe extends the
   // standard ValidationPipe and wires nestjs-i18n's exception factory so
   // validator messages produced via `i18nValidationMessage` are translated

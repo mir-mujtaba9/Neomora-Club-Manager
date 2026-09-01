@@ -17,6 +17,7 @@ model Tenant {
   defaultLang                 String                    @default("en") @map("default_lang")
   balanceThreshold            Decimal?                  @default(0) @map("balance_threshold") @db.Decimal(10, 2)
   whatsappPhoneId             String?                   @map("whatsapp_phone_id")
+  wabaId                      String?                   @map("waba_id")
   whatsappToken               String?                   @map("whatsapp_token")
   emailFrom                   String?                   @map("email_from")
   emailReplyTo                String?                   @map("email_reply_to")
@@ -53,6 +54,8 @@ model Tenant {
   rateCards                   RateCard[]
   discountRules               DiscountRule[]
   vatRates                    VatRate[]
+  messageTemplates            MessageTemplate[]
+  automationRules             AutomationRule[]
 
   @@map("tenants")
 }
@@ -798,6 +801,44 @@ enum WaitlistOfferStatus {
 enum Gender {
   MALE
   FEMALE
+}
+
+model MessageTemplate {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  category  String
+  language  String
+  status    String   @default("PENDING")
+  body      String
+  metaId    String?  @map("meta_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rules  AutomationRule[]
+
+  @@unique([tenantId, name, language])
+  @@index([tenantId])
+  @@map("message_templates")
+}
+
+model AutomationRule {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  trigger    String
+  templateId String   @map("template_id")
+  channel    String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template MessageTemplate @relation(fields: [templateId], references: [id])
+
+  @@unique([tenantId, trigger])
+  @@index([tenantId])
+  @@map("automation_rules")
 }
 
 enum NotificationChannel {
